@@ -19,11 +19,11 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: {
-    template: '%s - DL Tech Contract Analyzer',
-    default: 'DL Tech Contract Analyzer - Identify risks in legal contracts',
+    template: '%s - Legal Contract Analyzer',
+    default: 'Legal Contract Analyzer - Compare contracts and identify risks',
   },
   description:
-    'Compare legal contracts to identify key clauses, potential conflicts, and risks with our AI-powered Contract Analyzer. Upload your template and draft documents to get started.',
+    'Compare your template and draft contracts to identify key clauses, potential conflicts, and risks that may require further legal review.',
 }
 
 export default function RootLayout({

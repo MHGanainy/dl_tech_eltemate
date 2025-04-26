@@ -1,108 +1,170 @@
-import { Hero } from '@/components/Hero'
-import { Footer } from '@/components/Footer'
-import { Button } from '@/components/Button'
+'use client'
+
+import { useState } from 'react'
 import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
-import Link from 'next/link'
+import { FileUploader } from '@/components/FileUploader'
+import { Button } from '@/components/Button'
+import { RiskMeter } from '@/components/RiskMeter'
+import { ComparisonResults } from '@/components/ComparisonResults'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
+
+interface Clause {
+  clause_type: string
+  text: string
+  confidence: number
+}
+
+interface ComparisonItem {
+  clause_type: string
+  template_text: string
+  draft_text: string
+  analysis: string
+  risk_score: number
+}
+
+interface AnalysisResult {
+  template_clauses: Clause[]
+  draft_clauses: Clause[]
+  comparison: ComparisonItem[]
+  overall_risk: number
+}
 
 export default function Home() {
+  const [templateFile, setTemplateFile] = useState<File | null>(null)
+  const [draftFile, setDraftFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState<boolean>(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<AnalysisResult | null>(null)
+
+  const handleAnalyze = async () => {
+    if (!templateFile || !draftFile) {
+      setError('Please upload both template and draft files')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setResult(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('template', templateFile)
+      formData.append('draft', draftFile)
+
+      const response = await fetch('http://localhost:5001/api/compare', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      setResult(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const resetForm = () => {
+    setTemplateFile(null)
+    setDraftFile(null)
+    setResult(null)
+    setError(null)
+  }
+
   return (
     <>
-      <div className="relative py-20 sm:pt-36 sm:pb-24">
+      <div className="relative py-20">
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
-          <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
-              <span className="sr-only">DL Tech - </span>Legal Contract Analyzer
+          <div className="mx-auto max-w-5xl">
+            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-6xl">
+              Legal Contract Analyzer
             </h1>
-            <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
-              <p>
-                Legal professionals need effective tools to identify risks in contracts. Manual comparison is time-consuming and error-prone.
-              </p>
-              <p>
-                Our AI-powered Contract Analyzer helps you compare legal contracts to identify key clauses, potential conflicts, and risks in seconds.
-              </p>
-            </div>
-            <div className="mt-10 flex justify-center gap-6 sm:justify-start">
-              <Button href="/analyzer" className="px-8 py-4 text-lg">
-                Try Contract Analyzer
-              </Button>
-            </div>
-            <dl className="mt-10 grid grid-cols-2 gap-x-10 gap-y-6 sm:mt-16 sm:gap-x-16 sm:gap-y-10 sm:text-center lg:auto-cols-auto lg:grid-flow-col lg:grid-cols-none lg:justify-start lg:text-left">
-              {[
-                ['AI-Powered', 'GPT-4o'],
-                ['Supported Files', 'PDF, DOCX'],
-                ['Clause Types', '8+'],
-                ['Analysis Time', '<60s'],
-              ].map(([name, value]) => (
-                <div key={name}>
-                  <dt className="font-mono text-sm text-blue-600">{name}</dt>
-                  <dd className="mt-0.5 text-2xl font-semibold tracking-tight text-blue-900">
-                    {value}
-                  </dd>
+            <p className="mt-6 text-xl tracking-tight text-blue-900">
+              Compare your template and draft contracts to identify key clauses,
+              potential conflicts, and risks that may require further legal review.
+            </p>
+
+            {/* File upload section */}
+            {!result && (
+              <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
+                <FileUploader
+                  label="Template Contract"
+                  onFileSelected={setTemplateFile}
+                  selectedFile={templateFile}
+                />
+                <FileUploader
+                  label="Draft Contract"
+                  onFileSelected={setDraftFile}
+                  selectedFile={draftFile}
+                />
+                
+                {error && (
+                  <div className="col-span-full bg-red-50 p-4 rounded-xl text-red-700 text-sm">
+                    {error}
+                  </div>
+                )}
+                
+                <div className="col-span-full flex justify-center mt-6">
+                  <Button 
+                    onClick={handleAnalyze}
+                    disabled={loading || !templateFile || !draftFile}
+                    className="py-3 px-8 text-lg"
+                  >
+                    {loading ? <LoadingSpinner size="sm" className="mr-2" /> : null}
+                    {loading ? 'Analyzing...' : 'Analyze Contracts'}
+                  </Button>
                 </div>
-              ))}
-            </dl>
+              </div>
+            )}
+
+            {/* Loading state */}
+            {loading && (
+              <div className="mt-16 text-center">
+                <LoadingSpinner size="lg" className="mb-6" />
+                <p className="text-lg text-blue-900">
+                  Analyzing your contracts. This may take a minute...
+                </p>
+              </div>
+            )}
+
+            {/* Results section */}
+            {result && (
+              <div className="mt-12">
+                <div className="flex flex-col lg:flex-row justify-between items-start mb-12 gap-6">
+                  <div>
+                    <h2 className="text-3xl font-semibold tracking-tight text-blue-900">
+                      Analysis Results
+                    </h2>
+                    <p className="mt-2 text-lg text-blue-700">
+                      {result.comparison.length} clauses compared
+                    </p>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-4">
+                    <RiskMeter score={result.overall_risk} />
+                    <Button onClick={resetForm} className="self-center">
+                      Analyze Another Contract
+                    </Button>
+                  </div>
+                </div>
+                
+                <ComparisonResults
+                  templateClauses={result.template_clauses}
+                  draftClauses={result.draft_clauses}
+                  comparison={result.comparison}
+                />
+              </div>
+            )}
           </div>
         </Container>
       </div>
-
-      <section id="features" className="py-20 sm:py-32">
-        <Container>
-          <div className="mx-auto max-w-2xl lg:mx-0 lg:max-w-3xl">
-            <h2 className="font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
-              How It Works
-            </h2>
-            <p className="mt-4 font-display text-2xl tracking-tight text-blue-900">
-              Our Contract Analyzer makes it easy to identify risks and compare legal documents.
-            </p>
-          </div>
-          <div className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                title: 'Upload Documents',
-                description: 'Drag & drop your template and draft contracts in PDF or DOCX format.'
-              },
-              {
-                title: 'AI Analysis',
-                description: 'Our AI analyzes your documents, extracts key clauses, and identifies differences.'
-              },
-              {
-                title: 'Review Results',
-                description: 'Review the comparison results, see risk scores, and get plain English explanations.'
-              },
-              {
-                title: 'Clause Extraction',
-                description: 'Automatically identifies key clauses like license scope, ownership, and confidentiality terms.'
-              },
-              {
-                title: 'Risk Assessment',
-                description: 'Each difference is scored for risk, helping you prioritize your review.'
-              },
-              {
-                title: 'Plain English Explanations',
-                description: 'Complex legal differences are explained in simple, easy-to-understand language.'
-              }
-            ].map((feature, featureIndex) => (
-              <div key={featureIndex} className="flex flex-col rounded-3xl px-6 py-8 bg-blue-50">
-                <h3 className="font-display text-xl font-semibold text-blue-900">
-                  {feature.title}
-                </h3>
-                <p className="mt-2 text-lg text-blue-700">
-                  {feature.description}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-16 flex justify-center">
-            <Button href="/analyzer" className="px-8 py-4 text-lg">
-              Start Analyzing Contracts
-            </Button>
-          </div>
-        </Container>
-      </section>
-
-      <Footer />
     </>
   )
 }
