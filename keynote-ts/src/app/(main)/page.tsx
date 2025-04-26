@@ -8,6 +8,8 @@ import { Button } from '@/components/Button'
 import { RiskMeter } from '@/components/RiskMeter'
 import { ComparisonResults } from '@/components/ComparisonResults'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
+import { FullDocumentComparison } from '@/components/FullDocumentComparison'
 
 interface Clause {
   clause_type: string
@@ -28,6 +30,8 @@ interface AnalysisResult {
   draft_clauses: Clause[]
   comparison: ComparisonItem[]
   overall_risk: number
+  template_text?: string
+  draft_text?: string
 }
 
 export default function Home() {
@@ -51,6 +55,8 @@ export default function Home() {
       const formData = new FormData()
       formData.append('template', templateFile)
       formData.append('draft', draftFile)
+      // Request full text for the new full document comparison feature
+      formData.append('include_full_text', 'true')
 
       const response = await fetch('http://localhost:5001/api/compare', {
         method: 'POST',
@@ -155,11 +161,49 @@ export default function Home() {
                   </div>
                 </div>
                 
-                <ComparisonResults
-                  templateClauses={result.template_clauses}
-                  draftClauses={result.draft_clauses}
-                  comparison={result.comparison}
-                />
+                <TabGroup>
+                  <TabList className="flex space-x-1 rounded-xl bg-blue-50 p-1 mb-8">
+                    <Tab className={({ selected }) =>
+                      `w-full rounded-lg py-2.5 text-sm font-medium leading-5 
+                      ${selected 
+                        ? 'bg-white shadow text-blue-700' 
+                        : 'text-blue-500 hover:bg-white/[0.12] hover:text-blue-600'
+                      }`
+                    }>
+                      Clauses
+                    </Tab>
+                    <Tab className={({ selected }) =>
+                      `w-full rounded-lg py-2.5 text-sm font-medium leading-5 
+                      ${selected 
+                        ? 'bg-white shadow text-blue-700' 
+                        : 'text-blue-500 hover:bg-white/[0.12] hover:text-blue-600'
+                      }`
+                    }>
+                      Full Document
+                    </Tab>
+                  </TabList>
+                  <TabPanels>
+                    <TabPanel>
+                      <ComparisonResults
+                        templateClauses={result.template_clauses}
+                        draftClauses={result.draft_clauses}
+                        comparison={result.comparison}
+                      />
+                    </TabPanel>
+                    <TabPanel>
+                      {result.template_text && result.draft_text ? (
+                        <FullDocumentComparison 
+                          templateText={result.template_text}
+                          draftText={result.draft_text}
+                        />
+                      ) : (
+                        <div className="bg-amber-50 p-4 rounded-xl text-amber-700 text-sm">
+                          Full document text is not available. Please try analyzing the documents again.
+                        </div>
+                      )}
+                    </TabPanel>
+                  </TabPanels>
+                </TabGroup>
               </div>
             )}
           </div>

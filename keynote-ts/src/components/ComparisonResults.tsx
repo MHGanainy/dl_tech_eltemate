@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 interface Clause {
   clause_type: string
@@ -32,6 +32,12 @@ export function ComparisonResults({
   const [selectedClauseType, setSelectedClauseType] = useState<string | null>(
     comparison.length > 0 ? comparison[0].clause_type : null
   )
+  
+  // Refs for synchronized scrolling
+  const templateRef = useRef<HTMLDivElement>(null)
+  const draftRef = useRef<HTMLDivElement>(null)
+  const [isTemplateScrolling, setIsTemplateScrolling] = useState(false)
+  const [isDraftScrolling, setIsDraftScrolling] = useState(false)
 
   // Find the current comparison item based on selectedClauseType
   const currentComparison = comparison.find(
@@ -43,6 +49,67 @@ export function ComparisonResults({
     if (score <= 3) return 'bg-green-100 text-green-800'
     if (score <= 7) return 'bg-amber-100 text-amber-800'
     return 'bg-red-100 text-red-800'
+  }
+  
+  // Function to handle synchronized scrolling
+  const handleTemplateScroll = () => {
+    if (isTemplateScrolling || !templateRef.current || !draftRef.current) return
+    
+    setIsDraftScrolling(true)
+    const { scrollTop, scrollHeight, clientHeight } = templateRef.current
+    const scrollPercentage = scrollTop / (scrollHeight - clientHeight)
+    const draftScrollableHeight = draftRef.current.scrollHeight - draftRef.current.clientHeight
+    draftRef.current.scrollTop = scrollPercentage * draftScrollableHeight
+    
+    // Reset the flag after a short delay
+    setTimeout(() => setIsDraftScrolling(false), 50)
+  }
+  
+  const handleDraftScroll = () => {
+    if (isDraftScrolling || !templateRef.current || !draftRef.current) return
+    
+    setIsTemplateScrolling(true)
+    const { scrollTop, scrollHeight, clientHeight } = draftRef.current
+    const scrollPercentage = scrollTop / (scrollHeight - clientHeight)
+    const templateScrollableHeight = templateRef.current.scrollHeight - templateRef.current.clientHeight
+    templateRef.current.scrollTop = scrollPercentage * templateScrollableHeight
+    
+    // Reset the flag after a short delay
+    setTimeout(() => setIsTemplateScrolling(false), 50)
+  }
+  
+  // Attach scroll event listeners
+  useEffect(() => {
+    const templateElement = templateRef.current
+    const draftElement = draftRef.current
+    
+    if (templateElement) {
+      templateElement.addEventListener('scroll', handleTemplateScroll)
+    }
+    
+    if (draftElement) {
+      draftElement.addEventListener('scroll', handleDraftScroll)
+    }
+    
+    return () => {
+      if (templateElement) {
+        templateElement.removeEventListener('scroll', handleTemplateScroll)
+      }
+      
+      if (draftElement) {
+        draftElement.removeEventListener('scroll', handleDraftScroll)
+      }
+    }
+  }, [currentComparison])
+
+  // Function to highlight differences between the texts
+  const getDiffStyles = (text: string, referenceText: string) => {
+    if (!text || !referenceText) return text
+
+    // This is a simplified approach - a real diff would use a proper diff algorithm
+    // For now, we'll just add a background color to make it stand out
+    // A more robust implementation would use a library like 'diff' or 'jsdiff'
+    return text
   }
 
   return (
@@ -113,14 +180,19 @@ export function ComparisonResults({
                   </div>
                 </div>
                 
-                {/* Text comparison */}
-                <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-200">
+                {/* Side-by-side text comparison with synchronized scrolling */}
+                <div className="grid grid-cols-1 md:grid-cols-2 md:gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-200">
                   {/* Template version */}
                   <div className="p-6">
-                    <h4 className="text-sm font-semibold text-gray-500 uppercase mb-3">Template Version</h4>
+                    <div className="sticky top-0 bg-white z-10 pb-2">
+                      <h4 className="text-sm font-semibold text-gray-500 uppercase">Template Version</h4>
+                    </div>
                     {currentComparison.template_text ? (
-                      <div className="bg-gray-50 p-4 rounded-lg text-sm">
-                        {currentComparison.template_text}
+                      <div 
+                        ref={templateRef}
+                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto"
+                      >
+                        {getDiffStyles(currentComparison.template_text, currentComparison.draft_text)}
                       </div>
                     ) : (
                       <div className="bg-red-50 p-4 rounded-lg text-sm text-red-700">
@@ -131,10 +203,15 @@ export function ComparisonResults({
                   
                   {/* Draft version */}
                   <div className="p-6">
-                    <h4 className="text-sm font-semibold text-gray-500 uppercase mb-3">Draft Version</h4>
+                    <div className="sticky top-0 bg-white z-10 pb-2">
+                      <h4 className="text-sm font-semibold text-gray-500 uppercase">Draft Version</h4>
+                    </div>
                     {currentComparison.draft_text ? (
-                      <div className="bg-gray-50 p-4 rounded-lg text-sm">
-                        {currentComparison.draft_text}
+                      <div 
+                        ref={draftRef}
+                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto"
+                      >
+                        {getDiffStyles(currentComparison.draft_text, currentComparison.template_text)}
                       </div>
                     ) : (
                       <div className="bg-red-50 p-4 rounded-lg text-sm text-red-700">

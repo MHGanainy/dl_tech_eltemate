@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run dl_tech_eltemate app.py",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "/Users/andreasschultz/Documents/GitHub/dl_tech_eltemate/.venv/bin/python",
+            "program": "/Users/andreasschultz/Documents/GitHub/dl_tech_eltemate/app.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}

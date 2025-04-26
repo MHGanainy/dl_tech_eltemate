@@ -12,6 +12,7 @@ import logging
 from datetime import datetime
 import threading
 import queue
+import time
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -62,14 +63,18 @@ client = openai.OpenAI(
 
 # Define the clauses we want to extract and label
 CLAUSE_TYPES = [
-    "licence scope", 
-    "ownership", 
-    "patents challenged", 
-    "confidentiality term", 
-    "liability cap", 
-    "indemnity trigger", 
-    "governing law", 
-    "assignment rights"
+    "termination for convenience",
+    "cap on liability",
+    "uncapped liability",
+    "insurance",
+    "minimum commitment",
+    "revenue/profit sharing",
+    "non-compete",
+    "exclusivity",
+    "anti-assignment",
+    "change of control",
+    "license grant",
+    "ip ownership assignment"
 ]
 
 # Custom OpenAI client that logs requests and responses
@@ -502,7 +507,8 @@ def classify_clauses(text):
             # Ensure all required fields exist
             if "clause_type" not in clause or "text" not in clause:
                 continue
-                
+            if clause.get('text') is None:
+                clause['text'] = ""
             # Skip clauses that have no text or "not found" as text
             text = clause.get("text", "").strip()
             if not text or text.lower() in ["not found", "not explicitly found", "none", "n/a"]:
@@ -700,9 +706,19 @@ def compare_documents():
         
         # Classify clauses in each chunk
         template_clauses = []
-        for chunk in template_chunks:
+        for i, chunk in enumerate(template_chunks):
+            print(f"Processing chunk of length {len(chunk)}: {chunk[:200]}...")
+            ############# DEBUGGING #############
+            # Log the chunk being processed
+            logger.info(f"Processing chunk of length {len(chunk)}: {chunk[:200]}...")
+            ############# DEBUGGING #############
             clauses = classify_clauses(chunk)
+             
             template_clauses.extend(clauses)
+
+            # chill for 60 seconds to avoid rate limiting i%5
+            if i+1 % 5 == 0:
+               time.sleep(60)
         
         draft_clauses = []
         for chunk in draft_chunks:
