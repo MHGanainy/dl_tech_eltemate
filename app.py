@@ -4,6 +4,7 @@ import os
 import docx
 import PyPDF2
 import openai
+from openai import OpenAI
 import tempfile
 import json
 from werkzeug.utils import secure_filename
@@ -46,19 +47,19 @@ deepinfra_api_key = os.environ.get("DEEPINFRA_API_KEY")
 # Keeping OpenAI for compatibility or future toggling
 openai_api_key = os.environ.get("OPENAI_API_KEY")
 
-# Initialize HTTP client
-http_client = httpx.Client()
-
-# DeepInfra API endpoint
-DEEPINFRA_API_URL = "https://api.deepinfra.com/v1/openai/chat/completions"
-
 # Model selection - Change this to select different models
 LLAMA_MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"  # You can also use "meta-llama/Llama-3-8b-chat-hf" for a smaller model
+
+# Create DeepInfra client using OpenAI interface
+deepinfra_client = OpenAI(
+    api_key=deepinfra_api_key,
+    base_url="https://api.deepinfra.com/v1/openai",
+)
 
 # Create OpenAI client for compatibility
 client = openai.OpenAI(
     api_key=openai_api_key,
-    http_client=http_client
+    http_client=httpx.Client()
 )
 
 # Define the clauses we want to extract and label
@@ -124,12 +125,7 @@ class LoggingCompletionsCreate:
 logging_client = LoggingOpenAIClient(client)
 
 def call_deepinfra_llama(prompt, system_prompt=None):
-    """Call DeepInfra's Llama model API with improved error handling."""
-    headers = {
-        "Authorization": f"Bearer {deepinfra_api_key}",
-        "Content-Type": "application/json"
-    }
-    
+    """Call DeepInfra's Llama model API using OpenAI client interface with improved error handling."""
     # Trim prompt if too long (DeepInfra might have token limits)
     max_prompt_length = 10000  # Adjust as needed
     if len(prompt) > max_prompt_length:
@@ -155,63 +151,20 @@ def call_deepinfra_llama(prompt, system_prompt=None):
     # Set retries and timeouts
     max_retries = 2
     retry_count = 0
-    timeout_seconds = 90  # Longer timeout for complex requests
     
     while retry_count <= max_retries:
         try:
-            # Call DeepInfra API
-            payload = {
-                "model": LLAMA_MODEL,
-                "messages": messages,
-                "temperature": 0.1,
-                "max_tokens": 1500,  # Limit response size
-                "response_format": {"type": "json_object"}
-            }
-            
-            response = http_client.post(
-                DEEPINFRA_API_URL,
-                headers=headers,
-                json=payload,
-                timeout=timeout_seconds
+            # Call DeepInfra API using OpenAI client interface
+            response = deepinfra_client.chat.completions.create(
+                model=LLAMA_MODEL,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=1500,  # Limit response size
+                response_format={"type": "json_object"}
             )
             
-            # Handle HTTP errors more gracefully
-            if response.status_code != 200:
-                error_msg = f"HTTP Error {response.status_code}: {response.text}"
-                logger.error(error_msg)
-                
-                # If we've exhausted retries, return error in expected format
-                if retry_count == max_retries:
-                    return json.dumps({
-                        "error": error_msg,
-                        "clauses": []
-                    })
-                
-                # If we can retry, increase timeout and retry
-                retry_count += 1
-                timeout_seconds += 30
-                logger.info(f"Retrying request (attempt {retry_count} of {max_retries})")
-                continue
-            
-            # Try to parse the JSON response
-            try:
-                result = response.json()
-            except json.JSONDecodeError:
-                error_msg = f"Invalid JSON response from DeepInfra API"
-                logger.error(error_msg)
-                
-                # If we've exhausted retries, return error
-                if retry_count == max_retries:
-                    return json.dumps({
-                        "error": error_msg,
-                        "clauses": []
-                    })
-                
-                retry_count += 1
-                continue
-            
             # Extract content from the response
-            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = response.choices[0].message.content
             
             # If content is empty, try again
             if not content.strip():
@@ -227,7 +180,11 @@ def call_deepinfra_llama(prompt, system_prompt=None):
                 retry_count += 1
                 continue
             
-            # Log the response
+            # Log the response and token usage if available
+            usage_info = ""
+            if hasattr(response, 'usage'):
+                usage_info = f" (Tokens: {response.usage.prompt_tokens} prompt, {response.usage.completion_tokens} completion)"
+            
             log_entry = {
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'type': 'response',
@@ -235,7 +192,7 @@ def call_deepinfra_llama(prompt, system_prompt=None):
                 'content': content[:500] + "..." if len(content) > 500 else content
             }
             log_queue.put(log_entry)
-            logger.info(f"DeepInfra Response: {content[:100] if content else 'None'}...")
+            logger.info(f"DeepInfra Response{usage_info}: {content[:100] if content else 'None'}...")
             
             # Post-process content to ensure it's valid JSON
             # Sometimes language models surround JSON with markdown code blocks
@@ -277,20 +234,6 @@ def call_deepinfra_llama(prompt, system_prompt=None):
                 retry_count += 1
                 continue
                 
-        except httpx.TimeoutException:
-            error_msg = f"Timeout calling DeepInfra API after {timeout_seconds} seconds"
-            logger.error(error_msg)
-            
-            if retry_count == max_retries:
-                return json.dumps({
-                    "error": error_msg,
-                    "clauses": []
-                })
-            
-            retry_count += 1
-            timeout_seconds += 30
-            continue
-            
         except Exception as e:
             error_msg = f"Error calling DeepInfra API: {str(e)}"
             logger.error(error_msg)
@@ -348,7 +291,7 @@ def extract_text_from_pdf(file_path):
         logger.error(f"Error extracting text from PDF: {str(e)}")
         raise Exception(f"Failed to extract text from PDF file: {str(e)}")
 
-def chunk_document(text, max_chunk_size=2500, overlap=200):
+def chunk_document(text, max_chunk_size=100000, overlap=200):
     """Split document into overlapping chunks of maximum size."""
     if not text:
         return []
