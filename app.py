@@ -127,7 +127,7 @@ logging_client = LoggingOpenAIClient(client)
 def call_deepinfra_llama(prompt, system_prompt=None):
     """Call DeepInfra's Llama model API using OpenAI client interface with improved error handling."""
     # Trim prompt if too long (DeepInfra might have token limits)
-    max_prompt_length = 10000  # Adjust as needed
+    max_prompt_length = 100000  # Adjust as needed
     if len(prompt) > max_prompt_length:
         logger.warning(f"Prompt too long ({len(prompt)} chars), trimming to {max_prompt_length} chars")
         prompt = prompt[:max_prompt_length]
@@ -343,7 +343,7 @@ def classify_clauses(text):
     # Log the first part of the chunk being processed
     logger.info(f"Processing chunk of length {len(text)}: {text[:200]}...")
     
-    prompt = f"""Given the following contract excerpt, please identify and classify any of the following types of clauses:
+    prompt = f"""Given the following contract excerpt, please identify and classify any of the following types of clauses - if applicable:
     {', '.join(CLAUSE_TYPES)}
     
     For each identified clause, provide:
@@ -351,6 +351,7 @@ def classify_clauses(text):
     2. The relevant text
     3. A confidence score (0-100)
     
+    Only return clauses if you are more than 80% confident in the classification.
     Return your analysis as a JSON object with this structure:
     {{
       "clauses": [
@@ -370,7 +371,7 @@ def classify_clauses(text):
     """
     
     # Use DeepInfra Llama instead of OpenAI
-    system_prompt = "You are an AI assistant specialized in legal contract analysis. Extract and classify contract clauses accurately, focusing on precision and consistency. Always respond in valid JSON format with a 'clauses' array, even if empty."
+    system_prompt = "You are an AI assistant specialized in legal contract analysis. Extract and classify contract clauses accurately, focusing on precision and consistency. Only include clauses with confidence level > 80%. Always respond in valid JSON format with a 'clauses' array, even if empty."
     raw_response = call_deepinfra_llama(prompt, system_prompt)
     
     try:
@@ -465,14 +466,18 @@ def classify_clauses(text):
                     clause["confidence"] = int(clause["confidence"])
                 except:
                     clause["confidence"] = 70
+            
+            # Only include clauses with confidence > 80
+            if clause["confidence"] > 80:
+                valid_clauses.append(clause)
+            else:
+                logger.info(f"Skipping clause of type '{clause.get('clause_type', 'unknown')}' with confidence {clause.get('confidence', 0)} (below threshold)")
                     
-            valid_clauses.append(clause)
-        
         # Log the final extracted clauses
         if valid_clauses:
-            logger.info(f"Successfully extracted {len(valid_clauses)} valid clause(s): {str(valid_clauses)[:200]}...")
+            logger.info(f"Successfully extracted {len(valid_clauses)} valid high-confidence clause(s): {str(valid_clauses)[:200]}...")
         else:
-            logger.warning(f"No valid clauses found in the chunk. Response structure: {str(result)[:200]}...")
+            logger.warning(f"No valid high-confidence clauses found in the chunk. Response structure: {str(result)[:200]}...")
         
         return valid_clauses
             
