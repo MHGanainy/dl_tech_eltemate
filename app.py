@@ -40,10 +40,21 @@ queue_handler = QueueHandler()
 queue_handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
 logging.getLogger().addHandler(queue_handler)
 
-# Replace with your OpenAI API key or use environment variable
+# Replace with your DeepInfra API key or use environment variable
+deepinfra_api_key = os.environ.get("DEEPINFRA_API_KEY")
+# Keeping OpenAI for compatibility or future toggling
 openai_api_key = os.environ.get("OPENAI_API_KEY")
-# Create a client with the API key and explicitly set http_client without proxies
+
+# Initialize HTTP client
 http_client = httpx.Client()
+
+# DeepInfra API endpoint
+DEEPINFRA_API_URL = "https://api.deepinfra.com/v1/openai/chat/completions"
+
+# Model selection - Change this to select different models
+LLAMA_MODEL = "meta-llama/Llama-4-Scout-17B-16E-Instruct"  # You can also use "meta-llama/Llama-3-8b-chat-hf" for a smaller model
+
+# Create OpenAI client for compatibility
 client = openai.OpenAI(
     api_key=openai_api_key,
     http_client=http_client
@@ -107,561 +118,279 @@ class LoggingCompletionsCreate:
 # Replace the standard client with our logging client
 logging_client = LoggingOpenAIClient(client)
 
-# Add a simple index route
-@app.route('/')
-def index():
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>DL Tech Contract Analyzer API</title>
-        <style>
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 20px;
-            }
-            h1 {
-                color: #3B82F6;
-            }
-            .endpoint {
-                background-color: #f8f9fa;
-                border-left: 4px solid #3B82F6;
-                padding: 15px;
-                margin-bottom: 20px;
-            }
-            code {
-                background-color: #f1f1f1;
-                padding: 2px 5px;
-                border-radius: 3px;
-                font-family: monospace;
-            }
-            .nav-links {
-                display: flex;
-                gap: 20px;
-                margin-bottom: 20px;
-            }
-            .nav-links a {
-                color: #3B82F6;
-                font-weight: 600;
-                text-decoration: none;
-            }
-            .nav-links a:hover {
-                text-decoration: underline;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>DL Tech Contract Analyzer API</h1>
-        
-        <div class="nav-links">
-            <a href="/">Home</a>
-            <a href="/demo">Demo & Examples</a>
-            <a href="/live-logs">Live Logs</a>
-        </div>
-        
-        <p>This is the API server for the DL Tech Contract Analyzer. The API provides document comparison and analysis functionality.</p>
-        
-        <div class="endpoint">
-            <h2>Available Endpoints:</h2>
-            <p><strong>POST /api/compare</strong> - Compare template and draft contract documents</p>
-            <p>This endpoint accepts two files: a template document and a draft document. It analyzes both documents, extracts key clauses, and compares them.</p>
-            <p><em>Expected input:</em> multipart/form-data with 'template' and 'draft' files (PDF or DOCX)</p>
-        </div>
-        
-        <p>To use this API, please connect through the frontend application or send requests directly to the endpoints.</p>
-        <p>For a demonstration of the AI prompts and responses used in the backend, visit the <a href="/demo">Demo page</a>.</p>
-        <p>To see real-time logs of OpenAI API calls as they happen, visit the <a href="/live-logs">Live Logs page</a>.</p>
-        <p>Created by Mohamed Elganayni and Andreas Schultz for the Legal Tech Hackathon 2025.</p>
-    </body>
-    </html>
-    """
-    return render_template_string(html)
-
-@app.route('/demo')
-def demo():
-    """Demo page showing the prompts and sample responses from OpenAI."""
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>DL Tech Contract Analyzer - Demo</title>
-        <style>
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 1000px;
-                margin: 0 auto;
-                padding: 20px;
-            }
-            h1, h2, h3 {
-                color: #3B82F6;
-            }
-            .card {
-                background-color: #f8f9fa;
-                border-left: 4px solid #3B82F6;
-                padding: 15px;
-                margin-bottom: 20px;
-                border-radius: 4px;
-            }
-            .prompt {
-                background-color: #f1f5f9;
-                padding: 15px;
-                border-radius: 4px;
-                margin-bottom: 10px;
-                font-family: monospace;
-                white-space: pre-wrap;
-                border-left: 4px solid #64748b;
-            }
-            .response {
-                background-color: #ecfdf5;
-                padding: 15px;
-                border-radius: 4px;
-                margin-bottom: 20px;
-                font-family: monospace;
-                white-space: pre-wrap;
-                border-left: 4px solid #10b981;
-            }
-            .json {
-                background-color: #eff6ff;
-                overflow-x: auto;
-            }
-            .navbar {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 20px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid #e5e7eb;
-            }
-            .navbar a {
-                color: #3B82F6;
-                text-decoration: none;
-                font-weight: bold;
-            }
-            .navbar a:hover {
-                text-decoration: underline;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="navbar">
-            <h1>DL Tech Contract Analyzer - Demo</h1>
-            <a href="/">Back to Home</a>
-        </div>
-        
-        <div class="card">
-            <h2>Clause Classification</h2>
-            <p>This demonstrates how the API extracts and classifies contract clauses using GPT-4o.</p>
-            
-            <h3>Prompt:</h3>
-            <div class="prompt">Given the following contract excerpt, please identify and classify any of the following types of clauses:
-licence scope, ownership, patents challenged, confidentiality term, liability cap, indemnity trigger, governing law, assignment rights
-
-For each identified clause, provide:
-1. The clause type
-2. The relevant text
-3. A confidence score (0-100)
-
-Return your analysis as a JSON array of objects with these properties: 
-{
-  "clause_type": "&lt;type&gt;",
-  "text": "&lt;extracted text&gt;",
-  "confidence": &lt;number 0-100&gt;
-}
-
-If no clauses are found, return an empty array.
-
-Contract excerpt:
-The Licensee shall have the right to use the Software only for internal business purposes and may not sublicense, distribute, or modify the Software without written permission from the Licensor. The ownership of all intellectual property rights in the Software shall remain with the Licensor. This agreement shall be governed by the laws of the State of California.</div>
-            
-            <h3>Response:</h3>
-            <div class="response json">{
-  "clauses": [
-    {
-      "clause_type": "licence scope",
-      "text": "The Licensee shall have the right to use the Software only for internal business purposes and may not sublicense, distribute, or modify the Software without written permission from the Licensor.",
-      "confidence": 95
-    },
-    {
-      "clause_type": "ownership",
-      "text": "The ownership of all intellectual property rights in the Software shall remain with the Licensor.",
-      "confidence": 98
-    },
-    {
-      "clause_type": "governing law",
-      "text": "This agreement shall be governed by the laws of the State of California.",
-      "confidence": 99
+def call_deepinfra_llama(prompt, system_prompt=None):
+    """Call DeepInfra's Llama model API with improved error handling."""
+    headers = {
+        "Authorization": f"Bearer {deepinfra_api_key}",
+        "Content-Type": "application/json"
     }
-  ]
-}</div>
-        </div>
-        
-        <div class="card">
-            <h2>Clause Comparison</h2>
-            <p>This demonstrates how the API compares clauses between a template and draft contract.</p>
+    
+    # Trim prompt if too long (DeepInfra might have token limits)
+    max_prompt_length = 10000  # Adjust as needed
+    if len(prompt) > max_prompt_length:
+        logger.warning(f"Prompt too long ({len(prompt)} chars), trimming to {max_prompt_length} chars")
+        prompt = prompt[:max_prompt_length]
+    
+    # Prepare messages with system prompt if provided
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    
+    # Log the request
+    log_entry = {
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'type': 'request',
+        'model': LLAMA_MODEL,
+        'prompt': prompt[:500] + "..." if len(prompt) > 500 else prompt
+    }
+    log_queue.put(log_entry)
+    logger.info(f"DeepInfra Request: {prompt[:100]}...")
+    
+    # Set retries and timeouts
+    max_retries = 2
+    retry_count = 0
+    timeout_seconds = 90  # Longer timeout for complex requests
+    
+    while retry_count <= max_retries:
+        try:
+            # Call DeepInfra API
+            payload = {
+                "model": LLAMA_MODEL,
+                "messages": messages,
+                "temperature": 0.1,
+                "max_tokens": 1500,  # Limit response size
+                "response_format": {"type": "json_object"}
+            }
             
-            <h3>Prompt:</h3>
-            <div class="prompt">Compare these two versions of a liability cap clause:
-
-TEMPLATE VERSION:
-Liability under this Agreement shall be limited to direct damages not exceeding the amount paid by Licensee to Licensor during the twelve (12) months preceding the claim.
-
-DRAFT VERSION:
-Liability under this Agreement shall be limited to direct damages not exceeding fifty thousand dollars ($50,000), and in no event shall either party be liable for any indirect, special, incidental, or consequential damages.
-
-Provide a brief analysis (under 80 words) in plain English of the key differences, any potential risks, 
-and whether legal review is recommended. Then provide a risk score from 1-10 (10 being highest risk).
-Format as JSON: {"analysis": "your analysis", "risk_score": number}</div>
+            response = http_client.post(
+                DEEPINFRA_API_URL,
+                headers=headers,
+                json=payload,
+                timeout=timeout_seconds
+            )
             
-            <h3>Response:</h3>
-            <div class="response json">{
-  "analysis": "The draft version sets a fixed liability cap of $50,000 instead of a variable cap based on fees paid. It also explicitly excludes indirect damages. This could be riskier if your fees exceed $50,000, but beneficial if they're lower. The exclusion of indirect damages provides additional protection. Legal review recommended.",
-  "risk_score": 6
-}</div>
-        </div>
-        
-        <div class="card">
-            <h2>How It Works</h2>
-            <p>The Document Comparison Process:</p>
-            <ol>
-                <li>Upload template and draft documents (PDF or DOCX)</li>
-                <li>Text extraction from documents</li>
-                <li>Document chunking for efficient processing</li>
-                <li>Clause classification using GPT-4o</li>
-                <li>Clause comparison between template and draft</li>
-                <li>Risk analysis and scoring</li>
-                <li>Results presentation</li>
-            </ol>
-            <p>Try it yourself by using the <a href="/api/compare">API endpoint</a> or connecting through the frontend application.</p>
-        </div>
-    </body>
-    </html>
-    """
-    return render_template_string(html)
-
-@app.route('/live-logs')
-def live_logs():
-    """Real-time logging page that shows OpenAI API calls as they happen."""
-    html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>DL Tech Contract Analyzer - Live Logs</title>
-        <style>
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 1200px;
-                margin: 0 auto;
-                padding: 20px;
-            }
-            h1, h2, h3 {
-                color: #3B82F6;
-            }
-            .navbar {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 20px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid #e5e7eb;
-            }
-            .navbar a {
-                color: #3B82F6;
-                text-decoration: none;
-                font-weight: bold;
-                margin-left: 15px;
-            }
-            .navbar a:hover {
-                text-decoration: underline;
-            }
-            .log-container {
-                background-color: #f8f9fa;
-                border-radius: 6px;
-                padding: 10px;
-                margin-bottom: 20px;
-                min-height: 500px;
-                max-height: 700px;
-                overflow-y: auto;
-                border: 1px solid #e5e7eb;
-            }
-            .log-entry {
-                padding: 10px;
-                margin-bottom: 10px;
-                border-radius: 4px;
-                font-family: monospace;
-                white-space: pre-wrap;
-                word-break: break-word;
-            }
-            .request {
-                background-color: #f1f5f9;
-                border-left: 4px solid #64748b;
-            }
-            .response {
-                background-color: #ecfdf5;
-                border-left: 4px solid #10b981;
-            }
-            .log {
-                background-color: #fff7ed;
-                border-left: 4px solid #f59e0b;
-            }
-            .log.ERROR {
-                background-color: #fee2e2;
-                border-left: 4px solid #ef4444;
-            }
-            .log.WARNING {
-                background-color: #fef9c3;
-                border-left: 4px solid #eab308;
-            }
-            .log.INFO {
-                background-color: #dbeafe;
-                border-left: 4px solid #3b82f6;
-            }
-            .timestamp {
-                font-size: 0.8em;
-                color: #64748b;
-                margin-bottom: 5px;
-            }
-            .model, .level {
-                font-size: 0.8em;
-                color: #0ea5e9;
-                margin-bottom: 5px;
-            }
-            .controls {
-                display: flex;
-                justify-content: space-between;
-                margin-bottom: 10px;
-            }
-            .filter-options {
-                margin-bottom: 10px;
-            }
-            .filter-options label {
-                margin-right: 10px;
-            }
-        </style>
-        <script>
-            // Function to fetch logs from the server
-            function fetchLogs() {
-                fetch('/api/logs')
-                    .then(response => response.json())
-                    .then(data => {
-                        const logContainer = document.getElementById('logs');
-                        logContainer.innerHTML = ''; // Clear existing logs
-                        
-                        // Apply filters
-                        const showRequests = document.getElementById('show-requests').checked;
-                        const showResponses = document.getElementById('show-responses').checked;
-                        const showLogs = document.getElementById('show-logs').checked;
-                        const showErrors = document.getElementById('show-errors').checked;
-                        
-                        data.logs.forEach(log => {
-                            // Skip if filtered out
-                            if (log.type === 'request' && !showRequests) return;
-                            if (log.type === 'response' && !showResponses) return;
-                            if (log.type === 'log' && !showLogs && log.level !== 'ERROR') return;
-                            if (log.type === 'log' && log.level === 'ERROR' && !showErrors) return;
-                            
-                            const logEntry = document.createElement('div');
-                            logEntry.className = `log-entry ${log.type}`;
-                            
-                            // Add level class for styling if it's a log
-                            if (log.type === 'log' && log.level) {
-                                logEntry.classList.add(log.level);
-                            }
-                            
-                            const timestamp = document.createElement('div');
-                            timestamp.className = 'timestamp';
-                            timestamp.textContent = log.timestamp;
-                            logEntry.appendChild(timestamp);
-                            
-                            if (log.type === 'log') {
-                                const level = document.createElement('div');
-                                level.className = 'level';
-                                level.textContent = `Level: ${log.level || 'INFO'}`;
-                                logEntry.appendChild(level);
-                            } else {
-                                const model = document.createElement('div');
-                                model.className = 'model';
-                                model.textContent = `Model: ${log.model}`;
-                                logEntry.appendChild(model);
-                            }
-                            
-                            const content = document.createElement('div');
-                            if (log.type === 'request') {
-                                content.textContent = log.prompt || 'No prompt content';
-                            } else if (log.type === 'response') {
-                                content.textContent = log.content || 'No response content';
-                            } else {
-                                content.textContent = log.content || 'No log content';
-                            }
-                            logEntry.appendChild(content);
-                            
-                            logContainer.appendChild(logEntry);
-                        });
-                        
-                        // Auto-scroll to bottom if auto-scroll is enabled
-                        if (document.getElementById('auto-scroll').checked) {
-                            logContainer.scrollTop = logContainer.scrollHeight;
-                        }
+            # Handle HTTP errors more gracefully
+            if response.status_code != 200:
+                error_msg = f"HTTP Error {response.status_code}: {response.text}"
+                logger.error(error_msg)
+                
+                # If we've exhausted retries, return error in expected format
+                if retry_count == max_retries:
+                    return json.dumps({
+                        "error": error_msg,
+                        "clauses": []
                     })
-                    .catch(error => console.error('Error fetching logs:', error));
+                
+                # If we can retry, increase timeout and retry
+                retry_count += 1
+                timeout_seconds += 30
+                logger.info(f"Retrying request (attempt {retry_count} of {max_retries})")
+                continue
+            
+            # Try to parse the JSON response
+            try:
+                result = response.json()
+            except json.JSONDecodeError:
+                error_msg = f"Invalid JSON response from DeepInfra API"
+                logger.error(error_msg)
+                
+                # If we've exhausted retries, return error
+                if retry_count == max_retries:
+                    return json.dumps({
+                        "error": error_msg,
+                        "clauses": []
+                    })
+                
+                retry_count += 1
+                continue
+            
+            # Extract content from the response
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            # If content is empty, try again
+            if not content.strip():
+                error_msg = "Empty response content from DeepInfra API"
+                logger.error(error_msg)
+                
+                if retry_count == max_retries:
+                    return json.dumps({
+                        "error": error_msg,
+                        "clauses": []
+                    })
+                
+                retry_count += 1
+                continue
+            
+            # Log the response
+            log_entry = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'type': 'response',
+                'model': LLAMA_MODEL,
+                'content': content[:500] + "..." if len(content) > 500 else content
             }
+            log_queue.put(log_entry)
+            logger.info(f"DeepInfra Response: {content[:100] if content else 'None'}...")
             
-            // Poll for new logs every 2 seconds
-            let pollingInterval;
+            # Post-process content to ensure it's valid JSON
+            # Sometimes language models surround JSON with markdown code blocks
+            import re
+            json_match = re.search(r'```(?:json)?(.*?)```', content, re.DOTALL)
+            if json_match:
+                # Extract content from code block
+                extracted_json = json_match.group(1).strip()
+                logger.info("Extracted JSON from code block in response")
+                content = extracted_json
+                
+            # Verify the response is valid JSON before returning
+            try:
+                json.loads(content)
+                return content
+            except json.JSONDecodeError as e:
+                logger.warning(f"Response is not valid JSON: {str(e)}")
+                
+                # Last attempt: try to extract JSON from text
+                json_match = re.search(r'({.*})', content, re.DOTALL)
+                if json_match:
+                    try:
+                        extracted = json_match.group(1)
+                        # Validate extracted content
+                        json.loads(extracted)
+                        logger.info("Successfully extracted valid JSON from response text")
+                        return extracted
+                    except:
+                        pass
+                
+                # If we're on the last retry, return a valid JSON with error information
+                if retry_count == max_retries:
+                    return json.dumps({
+                        "error": "Failed to get valid JSON response",
+                        "raw_response": content[:500],
+                        "clauses": []
+                    })
+                
+                retry_count += 1
+                continue
+                
+        except httpx.TimeoutException:
+            error_msg = f"Timeout calling DeepInfra API after {timeout_seconds} seconds"
+            logger.error(error_msg)
             
-            function startPolling() {
-                fetchLogs(); // Fetch immediately
-                pollingInterval = setInterval(fetchLogs, 2000); // Then every 2 seconds
+            if retry_count == max_retries:
+                return json.dumps({
+                    "error": error_msg,
+                    "clauses": []
+                })
+            
+            retry_count += 1
+            timeout_seconds += 30
+            continue
+            
+        except Exception as e:
+            error_msg = f"Error calling DeepInfra API: {str(e)}"
+            logger.error(error_msg)
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            # Log the error
+            log_entry = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'type': 'log',
+                'level': 'ERROR',
+                'content': error_msg,
+                'model': LLAMA_MODEL
             }
+            log_queue.put(log_entry)
             
-            function stopPolling() {
-                clearInterval(pollingInterval);
-            }
+            if retry_count == max_retries:
+                return json.dumps({
+                    "error": error_msg,
+                    "clauses": []
+                })
             
-            function clearLogs() {
-                fetch('/api/logs/clear', { method: 'POST' })
-                    .then(() => fetchLogs())
-                    .catch(error => console.error('Error clearing logs:', error));
-            }
-            
-            // Start polling when page loads
-            document.addEventListener('DOMContentLoaded', startPolling);
-            
-            // Stop polling when page unloads
-            window.addEventListener('beforeunload', stopPolling);
-        </script>
-    </head>
-    <body>
-        <div class="navbar">
-            <h1>DL Tech Contract Analyzer - Live Logs</h1>
-            <div>
-                <a href="/">Home</a>
-                <a href="/demo">Demo & Examples</a>
-            </div>
-        </div>
-        
-        <div class="controls">
-            <div>
-                <button onclick="clearLogs()">Clear Logs</button>
-                <label>
-                    <input type="checkbox" id="auto-scroll" checked> Auto-scroll to bottom
-                </label>
-            </div>
-            <div>
-                <button onclick="fetchLogs()">Refresh Now</button>
-            </div>
-        </div>
-        
-        <div class="filter-options">
-            <label>
-                <input type="checkbox" id="show-requests" checked> API Requests
-            </label>
-            <label>
-                <input type="checkbox" id="show-responses" checked> API Responses
-            </label>
-            <label>
-                <input type="checkbox" id="show-logs" checked> System Logs
-            </label>
-            <label>
-                <input type="checkbox" id="show-errors" checked> Errors
-            </label>
-        </div>
-        
-        <div class="log-container" id="logs">
-            <div class="log-entry">Loading logs...</div>
-        </div>
-        
-        <div>
-            <h3>How to Use</h3>
-            <p>This page shows the actual OpenAI API calls and system logs being made by the application in real-time. To see logs in action:</p>
-            <ol>
-                <li>Use the API to analyze documents via the <code>/api/compare</code> endpoint</li>
-                <li>Watch as the actual prompts sent to OpenAI, responses received, and system logs appear here</li>
-                <li>The logs are automatically refreshed every 2 seconds</li>
-                <li>Use the checkboxes above to filter different types of logs</li>
-            </ol>
-            <p>These logs show the actual prompts being used by the system to extract and classify contract clauses and compare them between documents, as well as any errors or warnings that may occur during processing.</p>
-        </div>
-    </body>
-    </html>
-    """
-    return render_template_string(html)
+            retry_count += 1
+            continue
+    
+    # This should not happen, but just in case
+    return json.dumps({
+        "error": "Failed to get response after all retries",
+        "clauses": []
+    })
 
-@app.route('/api/logs')
-def get_logs():
-    """API endpoint to get the current logs."""
-    logs = []
-    # Make a copy of the logs from the queue
-    temp_queue = queue.Queue()
-    
-    while not log_queue.empty():
-        log = log_queue.get()
-        logs.append(log)
-        temp_queue.put(log)
-    
-    # Restore the logs to the original queue
-    while not temp_queue.empty():
-        log_queue.put(temp_queue.get())
-    
-    return jsonify({"logs": logs})
-
-@app.route('/api/logs/clear', methods=['POST'])
-def clear_logs():
-    """API endpoint to clear the logs."""
-    while not log_queue.empty():
-        log_queue.get()
-    
-    return jsonify({"status": "success"})
-
-def extract_text_from_docx(file):
+def extract_text_from_docx(file_path):
     """Extract text from a DOCX file."""
-    doc = docx.Document(file)
-    text = ""
-    
-    for para in doc.paragraphs:
-        text += para.text + "\n"
-    
-    return text
+    try:
+        doc = docx.Document(file_path)
+        text = []
+        for para in doc.paragraphs:
+            text.append(para.text)
+        return '\n'.join(text)
+    except Exception as e:
+        logger.error(f"Error extracting text from DOCX: {str(e)}")
+        raise Exception(f"Failed to extract text from DOCX file: {str(e)}")
 
-def extract_text_from_pdf(file):
+def extract_text_from_pdf(file_path):
     """Extract text from a PDF file."""
-    pdf_reader = PyPDF2.PdfReader(file)
-    text = ""
-    
-    for page_num in range(len(pdf_reader.pages)):
-        page = pdf_reader.pages[page_num]
-        text += page.extract_text() + "\n"
-    
-    return text
+    try:
+        text = []
+        with open(file_path, 'rb') as f:
+            pdf_reader = PyPDF2.PdfReader(f)
+            for page_num in range(len(pdf_reader.pages)):
+                page = pdf_reader.pages[page_num]
+                text.append(page.extract_text())
+        return '\n'.join(text)
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF: {str(e)}")
+        raise Exception(f"Failed to extract text from PDF file: {str(e)}")
 
-def chunk_document(text, chunk_size=1000):
-    """Split document into chunks for processing."""
-    paragraphs = text.split('\n')
+def chunk_document(text, max_chunk_size=2500, overlap=200):
+    """Split document into overlapping chunks of maximum size."""
+    if not text:
+        return []
+    
+    # Strip extremely long strings that could be binary data
+    if len(text) > 100000:
+        logger.warning(f"Document is very large ({len(text)} chars), trimming to first 100k chars")
+        text = text[:100000]
+    
     chunks = []
-    current_chunk = ""
+    start = 0
     
-    for paragraph in paragraphs:
-        if paragraph.strip():
-            if len(current_chunk) + len(paragraph) > chunk_size:
-                chunks.append(current_chunk)
-                current_chunk = paragraph + "\n"
+    while start < len(text):
+        # Calculate end position of the chunk, considering max chunk size
+        end = min(start + max_chunk_size, len(text))
+        
+        # Try to find a good breaking point (paragraph/sentence end)
+        if end < len(text):
+            # Look for paragraph breaks first
+            paragraph_break = text.rfind('\n\n', start, end)
+            if paragraph_break != -1 and paragraph_break > start + max_chunk_size // 2:
+                end = paragraph_break + 2
             else:
-                current_chunk += paragraph + "\n"
-    
-    if current_chunk:
-        chunks.append(current_chunk)
+                # Look for line breaks
+                line_break = text.rfind('\n', start, end)
+                if line_break != -1 and line_break > start + max_chunk_size // 2:
+                    end = line_break + 1
+                else:
+                    # Look for sentence breaks (., !, ?)
+                    for punct in ['. ', '! ', '? ']:
+                        sentence_break = text.rfind(punct, start, end)
+                        if sentence_break != -1 and sentence_break > start + max_chunk_size // 2:
+                            end = sentence_break + 2
+                            break
+        
+        # Add the chunk
+        chunk = text[start:end].strip()
+        if chunk:  # Only add non-empty chunks
+            chunks.append(chunk)
+        
+        # Move to the next chunk, with overlap if not at the end
+        start = max(start, end - overlap) if end < len(text) else end
     
     return chunks
 
 def classify_clauses(text):
-    """Use GPT-4o to classify clauses in the text."""
+    """Use DeepInfra Llama to classify clauses in the text."""
     
     # Log the first part of the chunk being processed
     logger.info(f"Processing chunk of length {len(text)}: {text[:200]}...")
@@ -674,86 +403,134 @@ def classify_clauses(text):
     2. The relevant text
     3. A confidence score (0-100)
     
-    Return your analysis as a JSON array of objects with these properties: 
+    Return your analysis as a JSON object with this structure:
     {{
-      "clause_type": "<type>",
-      "text": "<extracted text>",
-      "confidence": <number 0-100>
+      "clauses": [
+        {{
+          "clause_type": "<type>",
+          "text": "<extracted text>",
+          "confidence": <number 0-100>
+        }},
+        ...
+      ]
     }}
     
-    If no clauses are found, return an empty array.
+    If no clauses are found, return {{"clauses": []}}.
     
     Contract excerpt:
     {text}
     """
     
-    response = logging_client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.1,
-        response_format={"type": "json_object"}
-    )
+    # Use DeepInfra Llama instead of OpenAI
+    system_prompt = "You are an AI assistant specialized in legal contract analysis. Extract and classify contract clauses accurately, focusing on precision and consistency. Always respond in valid JSON format with a 'clauses' array, even if empty."
+    raw_response = call_deepinfra_llama(prompt, system_prompt)
     
     try:
         # Log the raw response for debugging
-        raw_response = response.choices[0].message.content
         logger.info(f"Raw API response: {raw_response[:200]}...")
         
-        result = json.loads(raw_response)
+        # First, try to parse the JSON response
+        try:
+            result = json.loads(raw_response)
+        except json.JSONDecodeError as e:
+            # If the response isn't valid JSON, try to extract and repair the JSON part
+            logger.warning(f"Invalid JSON response: {str(e)}")
+            
+            # Try to extract JSON between curly braces
+            import re
+            json_match = re.search(r'({.*})', raw_response, re.DOTALL)
+            if json_match:
+                try:
+                    result = json.loads(json_match.group(1))
+                    logger.info("Successfully extracted JSON from response")
+                except:
+                    logger.error("Failed to parse extracted JSON")
+                    return []
+            else:
+                logger.error("Could not extract JSON from response")
+                return []
         
-        # Handle both possible response formats:
-        # 1. Direct array of clauses: [{"clause_type": "...", "text": "...", "confidence": 90}, ...]
-        # 2. Object with clauses key: {"clauses": [{"clause_type": "...", "text": "...", "confidence": 90}, ...]}
-        # 3. Single clause object: {"clause_type": "...", "text": "...", "confidence": 90}
-        
+        # Handle different response formats and normalize to a list of clauses
         clauses = []
-        if isinstance(result, list):
-            # If result is already a list, use it directly
-            clauses = result
-            logger.info(f"Response is a list with {len(clauses)} clause(s)")
-        elif "clauses" in result:
-            # If result has a "clauses" key, use that
+        
+        # Case 1: Response has a "clauses" key with an array
+        if isinstance(result, dict) and "clauses" in result and isinstance(result["clauses"], list):
             clauses = result["clauses"]
             logger.info(f"Response has 'clauses' key with {len(clauses)} clause(s)")
-        elif "clause_type" in result and "text" in result and "confidence" in result:
-            # If result is a single clause object, wrap it in a list
+        
+        # Case 2: Response is already a list of clauses
+        elif isinstance(result, list):
+            # Check if items look like clauses (have clause_type, text, confidence)
+            if all(isinstance(item, dict) and "clause_type" in item for item in result):
+                clauses = result
+                logger.info(f"Response is a list with {len(clauses)} clause(s)")
+        
+        # Case 3: Response is a single clause object
+        elif isinstance(result, dict) and "clause_type" in result and "text" in result:
             clauses = [result]
             logger.info("Response is a single clause object, wrapping in list")
-        elif any(key in result for key in CLAUSE_TYPES):
-            # If result contains any of our clause types as keys
+        
+        # Case 4: Response has clause types as keys
+        elif isinstance(result, dict):
             for clause_type in CLAUSE_TYPES:
-                if clause_type in result and result[clause_type]:
-                    clauses.append({
-                        "clause_type": clause_type,
-                        "text": result[clause_type].get("text", ""),
-                        "confidence": result[clause_type].get("confidence", 50)
-                    })
-            logger.info(f"Response has clause types as keys, found {len(clauses)} clause(s)")
-        else:
-            # Try to find any items that have clause_type, text, and confidence
-            for key, value in result.items():
-                if isinstance(value, dict) and "text" in value and "confidence" in value:
-                    clauses.append({
-                        "clause_type": key,
-                        "text": value["text"],
-                        "confidence": value["confidence"]
-                    })
-            logger.info(f"Using alternative detection, found {len(clauses)} clause(s)")
+                if clause_type in result:
+                    # Handle different possible structures
+                    if isinstance(result[clause_type], dict) and "text" in result[clause_type]:
+                        # Format: {"licence_scope": {"text": "...", "confidence": 90}}
+                        clauses.append({
+                            "clause_type": clause_type,
+                            "text": result[clause_type].get("text", ""),
+                            "confidence": result[clause_type].get("confidence", 50)
+                        })
+                    elif isinstance(result[clause_type], str) and result[clause_type]:
+                        # Format: {"licence_scope": "text..."}
+                        clauses.append({
+                            "clause_type": clause_type,
+                            "text": result[clause_type],
+                            "confidence": 70  # Default confidence
+                        })
+            
+            if clauses:
+                logger.info(f"Extracted {len(clauses)} clause(s) from keys")
+        
+        # Filter out empty or invalid clauses
+        valid_clauses = []
+        for clause in clauses:
+            if not isinstance(clause, dict):
+                continue
+                
+            # Ensure all required fields exist
+            if "clause_type" not in clause or "text" not in clause:
+                continue
+                
+            # Skip clauses that have no text or "not found" as text
+            text = clause.get("text", "").strip()
+            if not text or text.lower() in ["not found", "not explicitly found", "none", "n/a"]:
+                continue
+                
+            # Ensure confidence is a number
+            if "confidence" not in clause:
+                clause["confidence"] = 70
+            elif not isinstance(clause["confidence"], (int, float)):
+                try:
+                    clause["confidence"] = int(clause["confidence"])
+                except:
+                    clause["confidence"] = 70
+                    
+            valid_clauses.append(clause)
         
         # Log the final extracted clauses
-        if clauses:
-            logger.info(f"Successfully extracted {len(clauses)} clause(s): {str(clauses)[:200]}...")
+        if valid_clauses:
+            logger.info(f"Successfully extracted {len(valid_clauses)} valid clause(s): {str(valid_clauses)[:200]}...")
         else:
-            logger.warning(f"No clauses found in the chunk. Response structure: {str(result)[:200]}...")
+            logger.warning(f"No valid clauses found in the chunk. Response structure: {str(result)[:200]}...")
         
-        return clauses
+        return valid_clauses
             
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON response from OpenAI: {str(e)}")
-        logger.error(f"Invalid JSON was: {raw_response[:500]}")
-        return []
     except Exception as e:
         logger.error(f"Error in classify_clauses: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return []
 
 def compare_clauses(template_clauses, draft_clauses):
@@ -787,28 +564,75 @@ def compare_clauses(template_clauses, draft_clauses):
             Format as JSON: {{"analysis": "your analysis", "risk_score": number}}
             """
             
-            response = logging_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                response_format={"type": "json_object"}
-            )
+            # Use DeepInfra Llama instead of OpenAI
+            system_prompt = "You are an AI assistant specialized in legal contract analysis. Analyze the differences between contract clauses accurately and provide risk assessments. Always respond in valid JSON format with these exact keys: 'analysis' and 'risk_score'."
+            raw_response = call_deepinfra_llama(prompt, system_prompt)
             
             try:
-                result = json.loads(response.choices[0].message.content)
+                # First try to parse the raw response
+                try:
+                    result = json.loads(raw_response)
+                except json.JSONDecodeError:
+                    # If that fails, try to extract JSON from the response
+                    import re
+                    json_match = re.search(r'({.*})', raw_response, re.DOTALL)
+                    if json_match:
+                        try:
+                            result = json.loads(json_match.group(1))
+                            logger.info("Successfully extracted JSON from response")
+                        except:
+                            logger.error("Failed to extract valid JSON")
+                            # Use a default result
+                            result = {
+                                "analysis": "Error parsing response: Invalid JSON format",
+                                "risk_score": 5
+                            }
+                    else:
+                        # If we can't extract JSON, create a default result
+                        logger.error("Could not extract JSON from response")
+                        result = {
+                            "analysis": "Error parsing response: No JSON found",
+                            "risk_score": 5
+                        }
+                
+                # Validate that the result has the expected keys
+                if not isinstance(result, dict):
+                    logger.warning(f"Result is not a dictionary: {type(result)}")
+                    result = {"analysis": "Invalid response format", "risk_score": 5}
+                
+                # Ensure we have the required fields with valid values
+                analysis = result.get("analysis")
+                if not analysis or not isinstance(analysis, str):
+                    analysis = "No analysis provided"
+                
+                risk_score = result.get("risk_score")
+                if not isinstance(risk_score, (int, float)):
+                    try:
+                        risk_score = int(risk_score)
+                    except:
+                        risk_score = 5
+                
+                # Ensure risk score is within range
+                risk_score = max(1, min(10, risk_score))
+                
                 comparison.append({
                     "clause_type": clause_type,
                     "template_text": template_clause["text"],
                     "draft_text": draft_clause["text"],
-                    "analysis": result.get("analysis", "No analysis available"),
-                    "risk_score": result.get("risk_score", 5)
+                    "analysis": analysis,
+                    "risk_score": risk_score
                 })
-            except:
+                
+            except Exception as e:
+                logger.error(f"Error in compare_clauses: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                
                 comparison.append({
                     "clause_type": clause_type,
                     "template_text": template_clause["text"],
                     "draft_text": draft_clause["text"],
-                    "analysis": "Error analyzing clauses",
+                    "analysis": f"Error analyzing clauses: {str(e)}",
                     "risk_score": 5
                 })
         elif template_clause:
@@ -918,6 +742,26 @@ def compare_documents():
             os.unlink(temp_draft_path)
         except:
             pass
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    """API endpoint to retrieve recent logs."""
+    logs = []
+    
+    # Get all logs from the queue without removing them
+    queue_size = log_queue.qsize()
+    for _ in range(queue_size):
+        try:
+            log = log_queue.get(block=False)
+            logs.append(log)
+            log_queue.put(log)  # Put it back
+        except queue.Empty:
+            break
+    
+    # Sort logs by timestamp (most recent first)
+    logs.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    return jsonify({"logs": logs})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
