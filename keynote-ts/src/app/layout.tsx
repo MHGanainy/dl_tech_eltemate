@@ -17,13 +17,13 @@ const dmSans = DM_Sans({
   variable: '--font-dm-sans',
 })
 
-export const metadata: Metadata = {
+export const metadata = {
   title: {
-    template: '%s - IP Contract Analyzer',
-    default: 'IP Contract Analyzer - Compare contracts and identify risks',
+    template: '%s - Conflicto',
+    default: 'Conflicto - Compare contracts and identify risks',
   },
   description:
-    'Compare your template and draft contracts to identify key clauses, potential conflicts, and risks that may require further legal review.',
+    'AI-powered contract comparison tool that helps legal professionals identify risks and discrepancies between template and draft contracts.',
 }
 
 export default function RootLayout({
