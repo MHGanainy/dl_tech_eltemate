@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import * as Diff from 'diff'
 
 interface Clause {
   clause_type: string
@@ -14,6 +15,7 @@ interface ComparisonItem {
   draft_text: string
   analysis: string
   risk_score: number
+  highlighted_diff?: string
 }
 
 interface ComparisonResultsProps {
@@ -121,16 +123,6 @@ export function ComparisonResults({
     setShowAmendmentPanel(false);
   }, [selectedClauseType]);
 
-  // Function to highlight differences between the texts
-  const getDiffStyles = (text: string, referenceText: string) => {
-    if (!text || !referenceText) return text
-
-    // This is a simplified approach - a real diff would use a proper diff algorithm
-    // For now, we'll just add a background color to make it stand out
-    // A more robust implementation would use a library like 'diff' or 'jsdiff'
-    return text
-  }
-
   // Function to generate amendment for the current clause
   const generateAmendment = async () => {
     if (!currentComparison) return;
@@ -196,10 +188,7 @@ Please draft a balanced amendment that:
 3. Uses clear, precise legal language
 4. Is formatted as a proper contract clause
 
-Present your response with:
-1. A clear amendment title
-2. The full text of the proposed amendment
-3. A brief explanation of your rationale and how your amendment addresses the differences`;
+Provide ONLY the text of the proposed amendment without additional explanation.`;
 
   return (
     <div className={`w-full ${className}`}>
@@ -279,9 +268,14 @@ Present your response with:
                     {currentComparison.template_text ? (
                       <div 
                         ref={templateRef}
-                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto"
+                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto whitespace-pre-wrap"
                       >
-                        {getDiffStyles(currentComparison.template_text, currentComparison.draft_text)}
+                        {currentComparison.highlighted_diff ? (
+                          <div dangerouslySetInnerHTML={{ __html: currentComparison.highlighted_diff }} />
+                        ) : (
+                          // Fallback to client-side diffing if highlighted diff isn't available from API
+                          getDiffStyles(currentComparison.template_text, currentComparison.draft_text)
+                        )}
                       </div>
                     ) : (
                       <div className="bg-red-50 p-4 rounded-lg text-sm text-red-700">
@@ -298,9 +292,14 @@ Present your response with:
                     {currentComparison.draft_text ? (
                       <div 
                         ref={draftRef}
-                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto"
+                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto whitespace-pre-wrap"
                       >
-                        {getDiffStyles(currentComparison.draft_text, currentComparison.template_text)}
+                        {currentComparison.highlighted_diff ? (
+                          <div dangerouslySetInnerHTML={{ __html: currentComparison.highlighted_diff }} />
+                        ) : (
+                          // Fallback to client-side diffing if highlighted diff isn't available from API
+                          getDiffStyles(currentComparison.draft_text, currentComparison.template_text)
+                        )}
                       </div>
                     ) : (
                       <div className="bg-red-50 p-4 rounded-lg text-sm text-red-700">
@@ -328,7 +327,7 @@ Present your response with:
                       onClick={() => setShowAmendmentPanel(false)}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 010 1.414z" clipRule="evenodd" />
+                        <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
                       </svg>
                       Hide Amendment Panel
                     </button>
@@ -431,16 +430,9 @@ Present your response with:
                           </button>
                         </div>
                         <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-sm whitespace-pre-wrap">
-                          <h5 className="font-semibold text-lg text-blue-800 mb-3">{amendmentTitle}</h5>
-                          <div className="border-b border-gray-200 pb-4 mb-4">
-                            {amendment}
-                          </div>
-                          {explanation && (
-                            <div>
-                              <h6 className="font-semibold text-sm text-gray-700 mb-2">Explanation</h6>
-                              <p className="text-gray-600">{explanation}</p>
-                            </div>
-                          )}
+                          <h5 className="font-semibold mb-2">{amendmentTitle}</h5>
+                          <p>{amendment}</p>
+                          <p className="mt-4 text-gray-600 text-sm">{explanation}</p>
                         </div>
                       </div>
                     )}

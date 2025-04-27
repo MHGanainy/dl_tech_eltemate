@@ -14,6 +14,8 @@ from datetime import datetime
 import threading
 import queue
 import time
+import difflib
+import re
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -610,6 +612,83 @@ def compare_clauses(template_clauses, draft_clauses):
     
     return comparison
 
+def highlight_text_differences(template_text, draft_text):
+    """
+    Highlights differences between template and draft text at the word level.
+    Returns HTML-formatted text with highlighting.
+    """
+    # Use difflib to find differences at the word level
+    import re
+    
+    # Split texts into words and spaces for more precise diffing
+    def split_into_words(text):
+        # This regex preserves spaces and punctuation as separate tokens
+        return re.findall(r'\S+|\s+', text)
+    
+    template_words = split_into_words(template_text)
+    draft_words = split_into_words(draft_text)
+    
+    # Use difflib to get differences at the word level
+    diff = difflib.ndiff(template_words, draft_words)
+    
+    # Process diff output to create highlighted HTML
+    html_output = []
+    
+    # Group consecutive items of the same type for better rendering
+    current_type = None  # can be 'removed', 'added', or 'unchanged'
+    current_group = []
+    
+    for line in diff:
+        if line.startswith('- '):
+            # Word only in template (removed)
+            if current_type != 'removed' and current_group:
+                # Process previous group
+                if current_type == 'unchanged':
+                    html_output.append(''.join(current_group))
+                elif current_type == 'added':
+                    html_output.append(f'<span style="background-color: #ccffcc;">{"".join(current_group)}</span>')
+                current_group = []
+            
+            current_type = 'removed'
+            current_group.append(line[2:])
+            
+        elif line.startswith('+ '):
+            # Word only in draft (added)
+            if current_type != 'added' and current_group:
+                # Process previous group
+                if current_type == 'unchanged':
+                    html_output.append(''.join(current_group))
+                elif current_type == 'removed':
+                    html_output.append(f'<span style="background-color: #ffcccc; text-decoration: line-through;">{"".join(current_group)}</span>')
+                current_group = []
+            
+            current_type = 'added'
+            current_group.append(line[2:])
+            
+        elif line.startswith('  '):
+            # Word in both versions (unchanged)
+            if current_type != 'unchanged' and current_group:
+                # Process previous group
+                if current_type == 'removed':
+                    html_output.append(f'<span style="background-color: #ffcccc; text-decoration: line-through;">{"".join(current_group)}</span>')
+                elif current_type == 'added':
+                    html_output.append(f'<span style="background-color: #ccffcc;">{"".join(current_group)}</span>')
+                current_group = []
+            
+            current_type = 'unchanged'
+            current_group.append(line[2:])
+    
+    # Process the last group
+    if current_group:
+        if current_type == 'unchanged':
+            html_output.append(''.join(current_group))
+        elif current_type == 'removed':
+            html_output.append(f'<span style="background-color: #ffcccc; text-decoration: line-through;">{"".join(current_group)}</span>')
+        elif current_type == 'added':
+            html_output.append(f'<span style="background-color: #ccffcc;">{"".join(current_group)}</span>')
+    
+    return ''.join(html_output)
+
 @app.route('/api/compare', methods=['POST'])
 def compare_documents():
     """API endpoint to compare template and draft documents."""
@@ -676,6 +755,11 @@ def compare_documents():
         # Compare clauses
         comparison = compare_clauses(template_clauses, draft_clauses)
         
+        # Add highlighted differences to each comparison item
+        for item in comparison:
+            if item["template_text"] and item["draft_text"]:
+                item["highlighted_diff"] = highlight_text_differences(item["template_text"], item["draft_text"])
+        
         # Calculate overall risk score
         if comparison:
             overall_risk = sum(item["risk_score"] for item in comparison) / len(comparison)
@@ -694,6 +778,8 @@ def compare_documents():
         if include_full_text:
             response_data["template_text"] = template_text
             response_data["draft_text"] = draft_text
+            # Also add highlighted full document comparison
+            response_data["highlighted_full_diff"] = highlight_text_differences(template_text, draft_text)
         
         return jsonify(response_data)
         

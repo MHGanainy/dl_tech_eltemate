@@ -6,12 +6,14 @@ import * as Diff from 'diff'
 interface FullDocumentComparisonProps {
   templateText: string
   draftText: string
+  highlightedFullDiff?: string
   className?: string
 }
 
 export function FullDocumentComparison({
   templateText,
   draftText,
+  highlightedFullDiff,
   className = ''
 }: FullDocumentComparisonProps) {
   // Refs for synchronized scrolling
@@ -24,8 +26,11 @@ export function FullDocumentComparison({
   const [highlightedTemplate, setHighlightedTemplate] = useState<React.ReactNode>(null)
   const [highlightedDraft, setHighlightedDraft] = useState<React.ReactNode>(null)
 
-  // Process text to highlight differences
+  // Process text to highlight differences if server-side highlighting isn't available
   useEffect(() => {
+    // Only perform client-side highlighting if we don't have server-side highlighting
+    if (highlightedFullDiff) return;
+    
     // Split text into lines for better diff comparison
     const templateLines = templateText.split('\n')
     const draftLines = draftText.split('\n')
@@ -65,7 +70,7 @@ export function FullDocumentComparison({
     
     setHighlightedTemplate(templateHtml)
     setHighlightedDraft(draftHtml)
-  }, [templateText, draftText])
+  }, [templateText, draftText, highlightedFullDiff])
   
   // Function to handle synchronized scrolling
   const handleTemplateScroll = () => {
@@ -132,31 +137,47 @@ export function FullDocumentComparison({
         
         {/* Side-by-side text comparison with synchronized scrolling */}
         <div className="grid grid-cols-1 md:grid-cols-2 md:gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-200">
-          {/* Template version */}
-          <div className="p-6">
-            <div className="sticky top-0 bg-white z-10 pb-2">
-              <h4 className="text-sm font-semibold text-gray-500 uppercase">Template Version</h4>
+          {/* Template/Draft version combined with highlighting from server */}
+          {highlightedFullDiff ? (
+            <div className="p-6 md:col-span-2">
+              <div className="sticky top-0 bg-white z-10 pb-2">
+                <h4 className="text-sm font-semibold text-gray-500 uppercase">Highlighted Changes</h4>
+              </div>
+              <div 
+                className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
+              >
+                <div dangerouslySetInnerHTML={{ __html: highlightedFullDiff }} />
+              </div>
             </div>
-            <div 
-              ref={templateRef}
-              className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
-            >
-              {highlightedTemplate}
-            </div>
-          </div>
-          
-          {/* Draft version */}
-          <div className="p-6">
-            <div className="sticky top-0 bg-white z-10 pb-2">
-              <h4 className="text-sm font-semibold text-gray-500 uppercase">Draft Version</h4>
-            </div>
-            <div 
-              ref={draftRef}
-              className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
-            >
-              {highlightedDraft}
-            </div>
-          </div>
+          ) : (
+            <>
+              {/* Template version (client-side highlighting) */}
+              <div className="p-6">
+                <div className="sticky top-0 bg-white z-10 pb-2">
+                  <h4 className="text-sm font-semibold text-gray-500 uppercase">Template Version</h4>
+                </div>
+                <div 
+                  ref={templateRef}
+                  className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
+                >
+                  {highlightedTemplate}
+                </div>
+              </div>
+              
+              {/* Draft version (client-side highlighting) */}
+              <div className="p-6">
+                <div className="sticky top-0 bg-white z-10 pb-2">
+                  <h4 className="text-sm font-semibold text-gray-500 uppercase">Draft Version</h4>
+                </div>
+                <div 
+                  ref={draftRef}
+                  className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
+                >
+                  {highlightedDraft}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
