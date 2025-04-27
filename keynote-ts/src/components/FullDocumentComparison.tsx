@@ -26,40 +26,119 @@ export function FullDocumentComparison({
 
   // Process text to highlight differences
   useEffect(() => {
-    // Split text into lines for better diff comparison
-    const templateLines = templateText.split('\n')
-    const draftLines = draftText.split('\n')
-    
     // Process template text 
     const templateHtml: React.ReactNode[] = []
     const draftHtml: React.ReactNode[] = []
     
-    // Perform diff by paragraphs
-    const diff = Diff.diffLines(templateText, draftText)
+    // Function to process a paragraph and generate word-level diffs
+    const processParagraph = (templatePara: string, draftPara: string) => {
+      // Use word-level diffing for more precise highlights
+      const wordDiff = Diff.diffWords(templatePara, draftPara)
+      
+      const templateParaHtml: React.ReactNode[] = []
+      const draftParaHtml: React.ReactNode[] = []
+      
+      wordDiff.forEach((part, index) => {
+        // Create appropriate highlighting
+        const color = part.added 
+          ? 'bg-green-100' 
+          : part.removed 
+            ? 'bg-red-100' 
+            : ''
+        
+        // Add to appropriate document with highlighting
+        if (!part.added) {
+          templateParaHtml.push(
+            <span key={`t-${index}`} className={color}>
+              {part.value}
+            </span>
+          )
+        }
+        
+        if (!part.removed) {
+          draftParaHtml.push(
+            <span key={`d-${index}`} className={color}>
+              {part.value}
+            </span>
+          )
+        }
+      })
+      
+      return { templateParaHtml, draftParaHtml }
+    }
     
-    diff.forEach((part, index) => {
-      // Create appropriate highlighting
-      const color = part.added 
-        ? 'bg-green-100' 
-        : part.removed 
-          ? 'bg-red-100' 
-          : ''
-      
-      // Add to appropriate document with highlighting
-      if (!part.added) {
-        templateHtml.push(
-          <span key={`t-${index}`} className={color}>
-            {part.value}
-          </span>
-        )
-      }
-      
-      if (!part.removed) {
-        draftHtml.push(
-          <span key={`d-${index}`} className={color}>
-            {part.value}
-          </span>
-        )
+    // Split into paragraphs first
+    const templateParas = templateText.split(/\n\s*\n/)
+    const draftParas = draftText.split(/\n\s*\n/)
+    
+    // Compare paragraphs using structural diffing
+    const structuralDiff = Diff.diffArrays(templateParas, draftParas)
+    
+    // Process each part
+    structuralDiff.forEach((part, partIdx) => {
+      if (part.removed && structuralDiff[partIdx + 1]?.added) {
+        // This is a change - process the paragraphs with word diffing
+        const removedParas = part.value as string[]
+        const addedParas = structuralDiff[partIdx + 1].value as string[]
+        
+        // Match paragraphs 1:1 as best we can
+        const maxLen = Math.max(removedParas.length, addedParas.length)
+        
+        for (let i = 0; i < maxLen; i++) {
+          const templatePara = i < removedParas.length ? removedParas[i] : ''
+          const draftPara = i < addedParas.length ? addedParas[i] : ''
+          
+          // Process paragraph pair with word diffing
+          const { templateParaHtml, draftParaHtml } = processParagraph(templatePara, draftPara)
+          
+          templateHtml.push(
+            <p key={`tp-${partIdx}-${i}`}>
+              {templateParaHtml}
+            </p>
+          )
+          
+          draftHtml.push(
+            <p key={`dp-${partIdx}-${i}`}>
+              {draftParaHtml}
+            </p>
+          )
+        }
+      } else if (part.added || part.removed) {
+        // Just added or removed paragraphs
+        const paras = part.value as string[]
+        
+        paras.forEach((para, i) => {
+          if (part.removed) {
+            templateHtml.push(
+              <p key={`tp-${partIdx}-${i}`} className="bg-red-100">
+                {para}
+              </p>
+            )
+          } else if (part.added) {
+            draftHtml.push(
+              <p key={`dp-${partIdx}-${i}`} className="bg-green-100">
+                {para}
+              </p>
+            )
+          }
+        })
+      } else {
+        // Unchanged paragraphs
+        const paras = part.value as string[]
+        
+        paras.forEach((para, i) => {
+          templateHtml.push(
+            <p key={`tp-${partIdx}-${i}`}>
+              {para}
+            </p>
+          )
+          
+          draftHtml.push(
+            <p key={`dp-${partIdx}-${i}`}>
+              {para}
+            </p>
+          )
+        })
       }
     })
     
