@@ -52,6 +52,7 @@ IP Contract Analysis Tool to compare legal contracts (1x template, 1x new draft)
 3. Set up environment variables (create a `.env` file):
    ```
    DEEPINFRA_API_KEY=your_deepinfra_api_key
+   OPENAI_API_KEY=your_deepinfra_api_key
    FLASK_APP=app.py
    FLASK_ENV=development
    ```
