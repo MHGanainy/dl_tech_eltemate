@@ -32,6 +32,7 @@ interface AnalysisResult {
   overall_risk: number
   template_text?: string
   draft_text?: string
+  highlighted_draft_diff?: string
 }
 
 export default function Home() {
@@ -195,6 +196,7 @@ export default function Home() {
                         <FullDocumentComparison 
                           templateText={result.template_text}
                           draftText={result.draft_text}
+                          highlightedDraftDiff={result.highlighted_draft_diff}
                         />
                       ) : (
                         <div className="bg-amber-50 p-4 rounded-xl text-amber-700 text-sm">

@@ -612,10 +612,11 @@ def compare_clauses(template_clauses, draft_clauses):
     
     return comparison
 
-def highlight_text_differences(template_text, draft_text):
+def highlight_text_differences(template_text, draft_text, highlight_template=True):
     """
     Highlights differences between template and draft text at the word level.
     Returns HTML-formatted text with highlighting.
+    If highlight_template is False, only highlight changes in the draft version.
     """
     # Use difflib to find differences at the word level
     import re
@@ -650,7 +651,9 @@ def highlight_text_differences(template_text, draft_text):
                 current_group = []
             
             current_type = 'removed'
-            current_group.append(line[2:])
+            # Only include removed text if we're highlighting template changes
+            if highlight_template:
+                current_group.append(line[2:])
             
         elif line.startswith('+ '):
             # Word only in draft (added)
@@ -658,7 +661,7 @@ def highlight_text_differences(template_text, draft_text):
                 # Process previous group
                 if current_type == 'unchanged':
                     html_output.append(''.join(current_group))
-                elif current_type == 'removed':
+                elif current_type == 'removed' and highlight_template:
                     html_output.append(f'<span style="background-color: #ffcccc; text-decoration: line-through;">{"".join(current_group)}</span>')
                 current_group = []
             
@@ -669,7 +672,7 @@ def highlight_text_differences(template_text, draft_text):
             # Word in both versions (unchanged)
             if current_type != 'unchanged' and current_group:
                 # Process previous group
-                if current_type == 'removed':
+                if current_type == 'removed' and highlight_template:
                     html_output.append(f'<span style="background-color: #ffcccc; text-decoration: line-through;">{"".join(current_group)}</span>')
                 elif current_type == 'added':
                     html_output.append(f'<span style="background-color: #ccffcc;">{"".join(current_group)}</span>')
@@ -682,7 +685,7 @@ def highlight_text_differences(template_text, draft_text):
     if current_group:
         if current_type == 'unchanged':
             html_output.append(''.join(current_group))
-        elif current_type == 'removed':
+        elif current_type == 'removed' and highlight_template:
             html_output.append(f'<span style="background-color: #ffcccc; text-decoration: line-through;">{"".join(current_group)}</span>')
         elif current_type == 'added':
             html_output.append(f'<span style="background-color: #ccffcc;">{"".join(current_group)}</span>')
@@ -755,10 +758,11 @@ def compare_documents():
         # Compare clauses
         comparison = compare_clauses(template_clauses, draft_clauses)
         
-        # Add highlighted differences to each comparison item
+        # Add highlighted differences only to the draft text, not the template text
         for item in comparison:
             if item["template_text"] and item["draft_text"]:
-                item["highlighted_diff"] = highlight_text_differences(item["template_text"], item["draft_text"])
+                # Only highlight the draft text, showing what changed from the template
+                item["highlighted_draft_diff"] = highlight_text_differences(item["template_text"], item["draft_text"], highlight_template=False)
         
         # Calculate overall risk score
         if comparison:
@@ -778,8 +782,8 @@ def compare_documents():
         if include_full_text:
             response_data["template_text"] = template_text
             response_data["draft_text"] = draft_text
-            # Also add highlighted full document comparison
-            response_data["highlighted_full_diff"] = highlight_text_differences(template_text, draft_text)
+            # Only highlight changes in the draft text, not the template
+            response_data["highlighted_draft_diff"] = highlight_text_differences(template_text, draft_text, highlight_template=False)
         
         return jsonify(response_data)
         

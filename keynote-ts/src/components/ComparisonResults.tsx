@@ -16,6 +16,7 @@ interface ComparisonItem {
   analysis: string
   risk_score: number
   highlighted_diff?: string
+  highlighted_draft_diff?: string
 }
 
 interface ComparisonResultsProps {
@@ -260,7 +261,7 @@ Provide ONLY the text of the proposed amendment without additional explanation.`
                 
                 {/* Side-by-side text comparison with synchronized scrolling */}
                 <div className="grid grid-cols-1 md:grid-cols-2 md:gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-200">
-                  {/* Template version */}
+                  {/* Template version - no highlighting */}
                   <div className="p-6">
                     <div className="sticky top-0 bg-white z-10 pb-2">
                       <h4 className="text-sm font-semibold text-gray-500 uppercase">Template Version</h4>
@@ -270,12 +271,8 @@ Provide ONLY the text of the proposed amendment without additional explanation.`
                         ref={templateRef}
                         className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto whitespace-pre-wrap"
                       >
-                        {currentComparison.highlighted_diff ? (
-                          <div dangerouslySetInnerHTML={{ __html: currentComparison.highlighted_diff }} />
-                        ) : (
-                          // Fallback to client-side diffing if highlighted diff isn't available from API
-                          getDiffStyles(currentComparison.template_text, currentComparison.draft_text)
-                        )}
+                        {/* Display plain template text without highlighting */}
+                        {currentComparison.template_text}
                       </div>
                     ) : (
                       <div className="bg-red-50 p-4 rounded-lg text-sm text-red-700">
@@ -284,7 +281,7 @@ Provide ONLY the text of the proposed amendment without additional explanation.`
                     )}
                   </div>
                   
-                  {/* Draft version */}
+                  {/* Draft version - with highlighting */}
                   <div className="p-6">
                     <div className="sticky top-0 bg-white z-10 pb-2">
                       <h4 className="text-sm font-semibold text-gray-500 uppercase">Draft Version</h4>
@@ -294,10 +291,10 @@ Provide ONLY the text of the proposed amendment without additional explanation.`
                         ref={draftRef}
                         className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto whitespace-pre-wrap"
                       >
-                        {currentComparison.highlighted_diff ? (
-                          <div dangerouslySetInnerHTML={{ __html: currentComparison.highlighted_diff }} />
+                        {currentComparison.highlighted_draft_diff ? (
+                          <div dangerouslySetInnerHTML={{ __html: currentComparison.highlighted_draft_diff }} />
                         ) : (
-                          // Fallback to client-side diffing if highlighted diff isn't available from API
+                          // Fallback to client-side diffing with green highlights only
                           getDiffStyles(currentComparison.draft_text, currentComparison.template_text)
                         )}
                       </div>

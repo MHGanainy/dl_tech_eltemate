@@ -7,6 +7,7 @@ interface FullDocumentComparisonProps {
   templateText: string
   draftText: string
   highlightedFullDiff?: string
+  highlightedDraftDiff?: string
   className?: string
 }
 
@@ -14,6 +15,7 @@ export function FullDocumentComparison({
   templateText,
   draftText,
   highlightedFullDiff,
+  highlightedDraftDiff,
   className = ''
 }: FullDocumentComparisonProps) {
   // Refs for synchronized scrolling
@@ -22,43 +24,25 @@ export function FullDocumentComparison({
   const [isTemplateScrolling, setIsTemplateScrolling] = useState(false)
   const [isDraftScrolling, setIsDraftScrolling] = useState(false)
 
-  // State for highlighted text
-  const [highlightedTemplate, setHighlightedTemplate] = useState<React.ReactNode>(null)
+  // State for highlighted text (for client-side fallback)
   const [highlightedDraft, setHighlightedDraft] = useState<React.ReactNode>(null)
 
   // Process text to highlight differences if server-side highlighting isn't available
   useEffect(() => {
     // Only perform client-side highlighting if we don't have server-side highlighting
-    if (highlightedFullDiff) return;
+    if (highlightedDraftDiff) return;
     
-    // Split text into lines for better diff comparison
-    const templateLines = templateText.split('\n')
-    const draftLines = draftText.split('\n')
-    
-    // Process template text 
-    const templateHtml: React.ReactNode[] = []
+    // Process draft text with highlights for added content
     const draftHtml: React.ReactNode[] = []
     
     // Perform diff by paragraphs
     const diff = Diff.diffLines(templateText, draftText)
     
     diff.forEach((part, index) => {
-      // Create appropriate highlighting
-      const color = part.added 
-        ? 'bg-green-100' 
-        : part.removed 
-          ? 'bg-red-100' 
-          : ''
+      // Only highlight additions in the draft
+      const color = part.added ? 'bg-green-100' : ''
       
-      // Add to appropriate document with highlighting
-      if (!part.added) {
-        templateHtml.push(
-          <span key={`t-${index}`} className={color}>
-            {part.value}
-          </span>
-        )
-      }
-      
+      // Only process parts that appear in the draft (unchanged or added)
       if (!part.removed) {
         draftHtml.push(
           <span key={`d-${index}`} className={color}>
@@ -68,9 +52,8 @@ export function FullDocumentComparison({
       }
     })
     
-    setHighlightedTemplate(templateHtml)
     setHighlightedDraft(draftHtml)
-  }, [templateText, draftText, highlightedFullDiff])
+  }, [templateText, draftText, highlightedDraftDiff])
   
   // Function to handle synchronized scrolling
   const handleTemplateScroll = () => {
@@ -131,53 +114,41 @@ export function FullDocumentComparison({
             Full Document Comparison
           </h3>
           <p className="mt-1 text-sm text-gray-500">
-            Green highlights show additions in the draft, red highlights show removals from the template.
+            Green highlights show additions and changes in the draft version.
           </p>
         </div>
         
         {/* Side-by-side text comparison with synchronized scrolling */}
         <div className="grid grid-cols-1 md:grid-cols-2 md:gap-0 divide-y md:divide-y-0 md:divide-x divide-gray-200">
-          {/* Template/Draft version combined with highlighting from server */}
-          {highlightedFullDiff ? (
-            <div className="p-6 md:col-span-2">
-              <div className="sticky top-0 bg-white z-10 pb-2">
-                <h4 className="text-sm font-semibold text-gray-500 uppercase">Highlighted Changes</h4>
-              </div>
-              <div 
-                className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
-              >
-                <div dangerouslySetInnerHTML={{ __html: highlightedFullDiff }} />
-              </div>
+          {/* Template version - no highlighting */}
+          <div className="p-6">
+            <div className="sticky top-0 bg-white z-10 pb-2">
+              <h4 className="text-sm font-semibold text-gray-500 uppercase">Template Version</h4>
             </div>
-          ) : (
-            <>
-              {/* Template version (client-side highlighting) */}
-              <div className="p-6">
-                <div className="sticky top-0 bg-white z-10 pb-2">
-                  <h4 className="text-sm font-semibold text-gray-500 uppercase">Template Version</h4>
-                </div>
-                <div 
-                  ref={templateRef}
-                  className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
-                >
-                  {highlightedTemplate}
-                </div>
-              </div>
-              
-              {/* Draft version (client-side highlighting) */}
-              <div className="p-6">
-                <div className="sticky top-0 bg-white z-10 pb-2">
-                  <h4 className="text-sm font-semibold text-gray-500 uppercase">Draft Version</h4>
-                </div>
-                <div 
-                  ref={draftRef}
-                  className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
-                >
-                  {highlightedDraft}
-                </div>
-              </div>
-            </>
-          )}
+            <div 
+              ref={templateRef}
+              className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
+            >
+              {templateText}
+            </div>
+          </div>
+          
+          {/* Draft version - with highlighting */}
+          <div className="p-6">
+            <div className="sticky top-0 bg-white z-10 pb-2">
+              <h4 className="text-sm font-semibold text-gray-500 uppercase">Draft Version</h4>
+            </div>
+            <div 
+              ref={draftRef}
+              className="bg-gray-50 p-4 rounded-lg text-sm max-h-[700px] overflow-y-auto whitespace-pre-wrap font-mono"
+            >
+              {highlightedDraftDiff ? (
+                <div dangerouslySetInnerHTML={{ __html: highlightedDraftDiff }} />
+              ) : (
+                highlightedDraft
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
