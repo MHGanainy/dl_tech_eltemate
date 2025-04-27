@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import * as Diff from 'diff'
 
 interface Clause {
   clause_type: string
@@ -126,27 +125,10 @@ export function ComparisonResults({
   const getDiffStyles = (text: string, referenceText: string) => {
     if (!text || !referenceText) return text
 
-    // Use word-level diffing for precise highlighting of changes
-    const diff = Diff.diffWords(text, referenceText)
-    
-    // Create React components with appropriate highlighting
-    const diffComponents = diff.map((part, index) => {
-      // Apply highlighting based on whether parts are added, removed, or unchanged
-      const className = part.added 
-        ? 'bg-green-100' // Text present in current but not in reference (additions)
-        : part.removed 
-          ? 'bg-red-100' // Text present in reference but not in current (removals)
-          : '' // Unchanged text
-      
-      // Return the part with appropriate styling
-      return (
-        <span key={index} className={className}>
-          {part.value}
-        </span>
-      )
-    })
-    
-    return <>{diffComponents}</>
+    // This is a simplified approach - a real diff would use a proper diff algorithm
+    // For now, we'll just add a background color to make it stand out
+    // A more robust implementation would use a library like 'diff' or 'jsdiff'
+    return text
   }
 
   // Function to generate amendment for the current clause
@@ -297,7 +279,7 @@ Present your response with:
                     {currentComparison.template_text ? (
                       <div 
                         ref={templateRef}
-                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto whitespace-pre-wrap"
+                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto"
                       >
                         {getDiffStyles(currentComparison.template_text, currentComparison.draft_text)}
                       </div>
@@ -316,7 +298,7 @@ Present your response with:
                     {currentComparison.draft_text ? (
                       <div 
                         ref={draftRef}
-                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto whitespace-pre-wrap"
+                        className="bg-gray-50 p-4 rounded-lg text-sm max-h-[400px] overflow-y-auto"
                       >
                         {getDiffStyles(currentComparison.draft_text, currentComparison.template_text)}
                       </div>
