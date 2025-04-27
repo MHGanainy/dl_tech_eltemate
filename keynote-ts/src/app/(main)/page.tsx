@@ -90,7 +90,7 @@ export default function Home() {
         <Container className="relative">
           <div className="mx-auto max-w-5xl">
             <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-6xl">
-              Legal Contract Analyzer
+              IP Contract Analyzer
             </h1>
             <p className="mt-6 text-xl tracking-tight text-blue-900">
               Compare your template and draft contracts to identify key clauses,

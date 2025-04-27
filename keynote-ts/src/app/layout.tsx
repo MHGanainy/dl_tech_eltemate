@@ -19,8 +19,8 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: {
-    template: '%s - Legal Contract Analyzer',
-    default: 'Legal Contract Analyzer - Compare contracts and identify risks',
+    template: '%s - IP Contract Analyzer',
+    default: 'IP Contract Analyzer - Compare contracts and identify risks',
   },
   description:
     'Compare your template and draft contracts to identify key clauses, potential conflicts, and risks that may require further legal review.',

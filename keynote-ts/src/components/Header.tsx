@@ -1,19 +1,18 @@
 import Link from 'next/link'
 import { Container } from '@/components/Container'
-import { Logo } from '@/components/Logo'
 
 export function Header() {
   return (
     <header className="relative z-50 flex-none lg:pt-8">
       <Container className="flex flex-wrap items-center justify-center sm:justify-between lg:flex-nowrap">
         <div className="mt-6 lg:mt-0 lg:grow lg:basis-0">
-          <Link href="/">
-            <Logo className="h-12 w-auto text-slate-900" />
+          <Link href="/" className="text-xl font-bold text-blue-600">
+            IP Contract Analyzer
           </Link>
         </div>
         <div className="order-first -mx-4 flex flex-auto basis-full overflow-x-auto border-b border-blue-600/10 py-4 font-mono text-sm whitespace-nowrap text-blue-600 sm:-mx-6 lg:order-none lg:mx-0 lg:basis-auto lg:border-0 lg:py-0">
           <div className="mx-auto flex items-center gap-4 px-4">
-            <p className="font-semibold">Legal Contract Analyzer</p>
+            <p className="font-semibold">IP Contract Analyzer</p>
           </div>
         </div>
         <div className="hidden sm:mt-10 sm:flex lg:mt-0 lg:grow lg:basis-0 lg:justify-end gap-4">

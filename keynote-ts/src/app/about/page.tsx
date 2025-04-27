@@ -15,9 +15,9 @@ export default function About() {
           
           <div className="mt-8 space-y-6">
             <section>
-              <h2 className="text-2xl font-semibold tracking-tight text-blue-900">What is the Legal Contract Analyzer?</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-blue-900">What is the IP Contract Analyzer?</h2>
               <p className="mt-4 text-lg text-blue-900">
-                The Legal Contract Analyzer is an AI-powered tool designed to help legal professionals
+                The IP Contract Analyzer is an AI-powered tool designed to help legal professionals
                 compare contract documents. It extracts and categorizes key clauses, identifies deviations
                 between template and draft versions, and highlights potential risks that may require further review.
               </p>
