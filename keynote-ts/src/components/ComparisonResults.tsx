@@ -132,7 +132,10 @@ export function ComparisonResults({
     setAmendmentError('');
     
     try {
-      const response = await fetch('http://localhost:5001/api/generate-amendment', {
+      // Use the correct API endpoint URL - ensure we're using the right port and hostname
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+      
+      const response = await fetch(`${apiUrl}/api/generate-amendment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -146,17 +149,18 @@ export function ComparisonResults({
         })
       });
       
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
-      if (response.ok) {
-        setAmendment(data.amendment);
-        setAmendmentTitle(data.amendment_title || `${currentComparison.clause_type} Amendment`);
-        setExplanation(data.explanation || 'No explanation provided.');
-      } else {
-        setAmendmentError(data.error || 'Failed to generate amendment');
-      }
+      setAmendment(data.amendment);
+      setAmendmentTitle(data.amendment_title || `${currentComparison.clause_type} Amendment`);
+      setExplanation(data.explanation || 'No explanation provided.');
     } catch (error) {
       setAmendmentError('Network error: ' + (error instanceof Error ? error.message : String(error)));
+      console.error('Amendment generation error:', error);
     } finally {
       setIsGeneratingAmendment(false);
     }
