@@ -40,6 +40,16 @@ export function ComparisonResults({
   const [isTemplateScrolling, setIsTemplateScrolling] = useState(false)
   const [isDraftScrolling, setIsDraftScrolling] = useState(false)
 
+  // Amendment generation states
+  const [showAmendmentPanel, setShowAmendmentPanel] = useState(false)
+  const [customPrompt, setCustomPrompt] = useState('')
+  const [showCustomPrompt, setShowCustomPrompt] = useState(false)
+  const [amendment, setAmendment] = useState('')
+  const [amendmentTitle, setAmendmentTitle] = useState('')
+  const [explanation, setExplanation] = useState('')
+  const [isGeneratingAmendment, setIsGeneratingAmendment] = useState(false)
+  const [amendmentError, setAmendmentError] = useState('')
+
   // Find the current comparison item based on selectedClauseType
   const currentComparison = comparison.find(
     (item) => item.clause_type === selectedClauseType
@@ -103,6 +113,15 @@ export function ComparisonResults({
     }
   }, [currentComparison])
 
+  // Reset amendment state when changing selected clause
+  useEffect(() => {
+    setAmendment('');
+    setAmendmentTitle('');
+    setExplanation('');
+    setAmendmentError('');
+    setShowAmendmentPanel(false);
+  }, [selectedClauseType]);
+
   // Function to highlight differences between the texts
   const getDiffStyles = (text: string, referenceText: string) => {
     if (!text || !referenceText) return text
@@ -129,6 +148,76 @@ export function ComparisonResults({
     
     return <>{diffComponents}</>
   }
+
+  // Function to generate amendment for the current clause
+  const generateAmendment = async () => {
+    if (!currentComparison) return;
+    
+    setIsGeneratingAmendment(true);
+    setAmendmentError('');
+    
+    try {
+      const response = await fetch('http://localhost:5001/api/generate-amendment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          template_text: currentComparison.template_text,
+          draft_text: currentComparison.draft_text,
+          clause_type: currentComparison.clause_type,
+          analysis: currentComparison.analysis,
+          custom_prompt: showCustomPrompt ? customPrompt : ''
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setAmendment(data.amendment);
+        setAmendmentTitle(data.amendment_title || `${currentComparison.clause_type} Amendment`);
+        setExplanation(data.explanation || 'No explanation provided.');
+      } else {
+        setAmendmentError(data.error || 'Failed to generate amendment');
+      }
+    } catch (error) {
+      setAmendmentError('Network error: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsGeneratingAmendment(false);
+    }
+  };
+
+  // Function to copy amendment text to clipboard
+  const copyAmendmentToClipboard = () => {
+    navigator.clipboard.writeText(amendment);
+    // Could add a toast notification here
+  };
+
+  // Default prompt template for user customization
+  const defaultPromptTemplate = `You are a legal expert tasked with drafting an amendment to resolve differences between 
+clauses in a contract negotiation. Here are the details:
+
+CLAUSE TYPE: {clause_type}
+
+TEMPLATE VERSION:
+{template_text}
+
+DRAFT VERSION:
+{draft_text}
+
+ANALYSIS OF DIFFERENCES:
+{analysis}
+
+Please draft a balanced amendment that:
+1. Addresses the key differences between the versions
+2. Creates a fair compromise that protects both parties' interests
+3. Uses clear, precise legal language
+4. Is formatted as a proper contract clause
+
+Present your response with:
+1. A clear amendment title
+2. The full text of the proposed amendment
+3. A brief explanation of your rationale and how your amendment addresses the differences`;
 
   return (
     <div className={`w-full ${className}`}>
@@ -238,6 +327,143 @@ export function ComparisonResults({
                     )}
                   </div>
                 </div>
+
+                {/* Amendment generation button */}
+                <div className="flex items-center justify-center p-4 border-t border-gray-200 bg-gray-50">
+                  {!showAmendmentPanel ? (
+                    <button
+                      className="bg-blue-50 hover:bg-blue-100 text-blue-700 py-2 px-4 rounded-lg border border-blue-200 flex items-center transition-colors"
+                      onClick={() => setShowAmendmentPanel(true)}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                      </svg>
+                      Generate Amendment Suggestion
+                    </button>
+                  ) : (
+                    <button
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-4 rounded-lg border border-gray-300 flex items-center transition-colors"
+                      onClick={() => setShowAmendmentPanel(false)}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 010 1.414z" clipRule="evenodd" />
+                      </svg>
+                      Hide Amendment Panel
+                    </button>
+                  )}
+                </div>
+
+                {/* Amendment panel - only visible when showAmendmentPanel is true */}
+                {showAmendmentPanel && (
+                  <div className="border-t border-gray-200 p-6">
+                    <h4 className="text-lg font-semibold text-blue-900 mb-4">Amendment Suggestion</h4>
+                    
+                    {/* Prompt customization toggle */}
+                    <div className="mb-4 flex items-center">
+                      <label className="flex items-center cursor-pointer">
+                        <div className="relative">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only" 
+                            checked={showCustomPrompt}
+                            onChange={() => {
+                              if (!showCustomPrompt && !customPrompt) {
+                                setCustomPrompt(defaultPromptTemplate);
+                              }
+                              setShowCustomPrompt(!showCustomPrompt);
+                            }}
+                          />
+                          <div className={`block w-10 h-6 rounded-full transition-colors ${showCustomPrompt ? 'bg-blue-400' : 'bg-gray-300'}`}></div>
+                          <div className={`dot absolute left-1 top-1 w-4 h-4 rounded-full transition transform ${showCustomPrompt ? 'translate-x-4 bg-white' : 'bg-white'}`}></div>
+                        </div>
+                        <div className="ml-3 text-sm font-medium text-gray-700">
+                          Customize prompt
+                        </div>
+                      </label>
+                    </div>
+                    
+                    {/* Prompt customization area */}
+                    {showCustomPrompt && (
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Custom Prompt Template
+                        </label>
+                        <div className="text-xs text-gray-500 mb-2">
+                          Use placeholders: {'{clause_type}'}, {'{template_text}'}, {'{draft_text}'}, {'{analysis}'}
+                        </div>
+                        <textarea
+                          value={customPrompt}
+                          onChange={(e) => setCustomPrompt(e.target.value)}
+                          className="w-full h-60 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Enter your custom prompt template..."
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Generate button */}
+                    <div className="mb-6">
+                      <button
+                        className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-lg flex items-center justify-center transition-colors"
+                        onClick={generateAmendment}
+                        disabled={isGeneratingAmendment}
+                      >
+                        {isGeneratingAmendment ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                            </svg>
+                            Generate Amendment
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    
+                    {/* Error message */}
+                    {amendmentError && (
+                      <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg">
+                        {amendmentError}
+                      </div>
+                    )}
+                    
+                    {/* Amendment result */}
+                    {amendment && (
+                      <div className="relative">
+                        <div className="absolute top-3 right-3">
+                          <button
+                            onClick={copyAmendmentToClipboard}
+                            className="text-gray-500 hover:text-gray-700 p-1"
+                            title="Copy to clipboard"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M8 2a1 1 0 000 2h2a1 1 0 100-2H8z" />
+                              <path d="M3 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v6h-4.586l1.293-1.293a1 1 0 00-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L10.414 13H15v3a2 2 0 01-2 2H5a2 2 0 01-2-2V5zM15 11h2a1 1 0 110 2h-2v-2z" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-sm whitespace-pre-wrap">
+                          <h5 className="font-semibold text-lg text-blue-800 mb-3">{amendmentTitle}</h5>
+                          <div className="border-b border-gray-200 pb-4 mb-4">
+                            {amendment}
+                          </div>
+                          {explanation && (
+                            <div>
+                              <h6 className="font-semibold text-sm text-gray-700 mb-2">Explanation</h6>
+                              <p className="text-gray-600">{explanation}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ) : (

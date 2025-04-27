@@ -727,5 +727,137 @@ def get_logs():
     
     return jsonify({"logs": logs})
 
+@app.route('/api/generate-amendment', methods=['POST'])
+def generate_amendment():
+    """API endpoint to generate an amendment suggestion for a clause."""
+    # Check if we have all required fields
+    if not request.json:
+        return jsonify({"error": "Request must be JSON"}), 400
+    
+    data = request.json
+    if not all(k in data for k in ['template_text', 'draft_text', 'clause_type', 'analysis']):
+        return jsonify({"error": "Missing required fields"}), 400
+    
+    # Get user-provided prompt if available, otherwise use default
+    custom_prompt = data.get('custom_prompt', '')
+    
+    # Construct the prompt for the LLM
+    if custom_prompt:
+        # User has provided a custom prompt template
+        # Replace placeholders with actual values
+        prompt = custom_prompt.replace('{clause_type}', data['clause_type'])
+        prompt = prompt.replace('{template_text}', data['template_text'])
+        prompt = prompt.replace('{draft_text}', data['draft_text'])
+        prompt = prompt.replace('{analysis}', data['analysis'])
+    else:
+        # Use default prompt with improved structure for better formatting and explanation
+        prompt = f"""
+        You are a legal expert tasked with drafting an amendment to resolve differences between 
+        clauses in a contract negotiation. Here are the details:
+
+        CLAUSE TYPE: {data['clause_type']}
+
+        TEMPLATE VERSION:
+        {data['template_text']}
+
+        DRAFT VERSION:
+        {data['draft_text']}
+
+        ANALYSIS OF DIFFERENCES:
+        {data['analysis']}
+
+        Please draft a balanced amendment that:
+        1. Addresses the key differences between the versions
+        2. Creates a fair compromise that protects both parties' interests
+        3. Uses clear, precise legal language
+        4. Is formatted as a proper contract clause
+
+        Present your response in the following format:
+        {{
+            "amendment_title": "Concise title for the amendment",
+            "amendment_text": "The full text of the proposed amendment clause, properly formatted with paragraph breaks where appropriate",
+            "explanation": "A clear explanation of why you made these specific changes and how they address the differences between the versions. Include the reasoning behind any compromises."
+        }}
+        """
+    
+    # Use the LLM to generate amendment
+    system_prompt = "You are an expert legal advisor specializing in contract drafting and negotiation. Create precise, balanced amendment language that addresses the differences between contract clauses. Always respond with well-structured, clearly formatted text."
+    
+    try:
+        raw_response = call_deepinfra_llama(prompt, system_prompt)
+        
+        # Parse response and format as JSON
+        try:
+            response_data = json.loads(raw_response)
+            
+            # Check if we have our expected structure
+            if isinstance(response_data, dict):
+                # If using our preferred format with separate fields
+                if 'amendment_text' in response_data and 'explanation' in response_data:
+                    amendment_text = response_data.get('amendment_text', '')
+                    explanation = response_data.get('explanation', '')
+                    amendment_title = response_data.get('amendment_title', data['clause_type'].title() + ' Amendment')
+                # If the model returned a single key with the clause type
+                elif data['clause_type'] in response_data:
+                    amendment_text = response_data[data['clause_type']]
+                    explanation = "No detailed explanation provided."
+                    amendment_title = data['clause_type'].title() + ' Amendment'
+                # If it's some other format, just grab what we can
+                elif 'amendment' in response_data:
+                    amendment_text = response_data['amendment']
+                    explanation = response_data.get('explanation', 'No detailed explanation provided.')
+                    amendment_title = data['clause_type'].title() + ' Amendment'
+                else:
+                    # Use the first key as title and its value as amendment text
+                    first_key = next(iter(response_data))
+                    amendment_text = response_data[first_key]
+                    explanation = "No detailed explanation provided."
+                    amendment_title = first_key
+            else:
+                # Fallback for unexpected response format
+                amendment_text = raw_response
+                explanation = "No detailed explanation provided."
+                amendment_title = data['clause_type'].title() + ' Amendment'
+                
+        except json.JSONDecodeError:
+            # If it's not JSON, just use the raw text as the amendment
+            amendment_text = raw_response
+            explanation = "No detailed explanation provided."
+            amendment_title = data['clause_type'].title() + ' Amendment'
+            
+            # Try to extract structured information from non-JSON response
+            import re
+            
+            # Try to find a title
+            title_match = re.search(r'^(?:#+\s*)?(.*?Amendment.*?)(?:\n|$)', amendment_text, re.IGNORECASE | re.MULTILINE)
+            if title_match:
+                amendment_title = title_match.group(1).strip()
+            
+            # Try to find explanation section
+            explanation_match = re.search(r'(?:explanation|rationale|reasoning):\s*(.*?)(?:\n\n|\n#|\Z)', 
+                                        amendment_text, re.IGNORECASE | re.DOTALL)
+            if explanation_match:
+                explanation = explanation_match.group(1).strip()
+                # Remove this section from amendment_text
+                amendment_text = amendment_text.replace(explanation_match.group(0), '').strip()
+            
+            # Clean up the text - remove markdown code blocks if present
+            code_block_match = re.search(r'```(?:.*?)\n(.*?)```', amendment_text, re.DOTALL)
+            if code_block_match:
+                amendment_text = code_block_match.group(1).strip()
+        
+        # Format the amendment text with proper line breaks for readability
+        formatted_amendment = amendment_text.replace('. ', '.\n').replace('.\n\n', '.\n')
+        
+        return jsonify({
+            "amendment_title": amendment_title,
+            "amendment": formatted_amendment, 
+            "explanation": explanation,
+            "clause_type": data['clause_type']
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
